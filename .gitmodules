@@ -1,0 +1,3 @@
+[submodule "vendor/pi-gen"]
+	path = vendor/pi-gen
+	url = https://github.com/RPi-Distro/pi-gen.git
