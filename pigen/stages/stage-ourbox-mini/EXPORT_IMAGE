@@ -1,0 +1,7 @@
+# OurBox Mini final export image
+IMG_SUFFIX=""
+
+# If using qemu mode, keep the suffix explicit
+if [ "${USE_QEMU}" = "1" ]; then
+  IMG_SUFFIX="-qemu"
+fi
