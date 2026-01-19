@@ -5,6 +5,9 @@ source "$(dirname "$0")/registry.sh"
 
 CLI="$(pick_container_cli)"
 
+# If we're using nerdctl, we need buildkitd.
+ensure_buildkitd
+
 DEPLOY_DIR="${1:-deploy}"
 
 IMG_XZ="$(ls -1 "${DEPLOY_DIR}"/img-*.img.xz | head -n 1)"
@@ -45,10 +48,12 @@ if [ ! -f "${tmp}/build.log" ]; then
 fi
 
 echo ">> Building OCI artifact image: ${IMAGE}"
-"$CLI" build -t "${IMAGE}" "${tmp}"
+# shellcheck disable=SC2086
+$CLI build -t "${IMAGE}" "${tmp}"
 
 echo ">> Pushing: ${IMAGE}"
-"$CLI" push "${IMAGE}"
+# shellcheck disable=SC2086
+$CLI push "${IMAGE}"
 
 echo
 echo "DONE:"

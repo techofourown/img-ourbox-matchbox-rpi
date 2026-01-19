@@ -3,20 +3,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Pick a container CLI
-if [ -z "${DOCKER:-}" ]; then
-  if command -v docker >/dev/null 2>&1; then
-    DOCKER=docker
-  elif command -v nerdctl >/dev/null 2>&1; then
-    DOCKER=nerdctl
-  elif command -v podman >/dev/null 2>&1; then
-    DOCKER=podman
-  else
-    echo "No container CLI found (need docker, nerdctl, or podman)." >&2
-    exit 1
-  fi
-fi
+# shellcheck disable=SC1091
+source "${ROOT}/tools/registry.sh"
+
+# Pick a container CLI (caller can override with DOCKER=...)
+DOCKER="${DOCKER:-$(pick_container_cli)}"
 export DOCKER
+
+# If we're using nerdctl, we need buildkitd running.
+ensure_buildkitd
+
+# Ensure build dependencies are pulled from OUR registry and tagged to the names vendor expects.
+"${ROOT}/tools/pull-required-images.sh"
 
 # Defaults (override by prefixing env vars when invoking)
 : "${OURBOX_TARGET:=rpi}"
