@@ -1,0 +1,23 @@
+# -----------------------------------------------------------------------------
+# Build outputs (do not commit)
+# -----------------------------------------------------------------------------
+/deploy/
+/deploy-from-registry/
+/work/
+/tmp/
+
+# OS image artifacts
+*.img
+*.img.xz
+*.info
+*.bmap
+*.sha256
+build.log
+
+# Common scratch
+*.tmp
+*.swp
+.DS_Store
+
+# Optional local overrides (keep repo defaults committed)
+tools/registry.env.local
