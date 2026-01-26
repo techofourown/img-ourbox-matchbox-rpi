@@ -1,39 +1,45 @@
 # Documentation
 
-This repository uses a lightweight documentation structure focused on RFCs and ADRs.
+This repository’s documentation is split into four “useful” buckets plus two “historical” buckets:
 
 ## Structure
 
 ```
 docs/
-├── rfcs/          # Pre-decisional exploration and proposals
-└── decisions/     # Architecture Decision Records (ADRs)
+├── guides/          # “How do I…?” step-by-step procedures (golden paths)
+├── reference/       # Contracts + facts about the system (stable, linkable)
+├── runbooks/        # Operational playbooks (release, clean build, recovery)
+├── troubleshooting/ # Symptoms → diagnosis → fixes
+├── rfcs/            # Pre-decision exploration (field notes, options, trade-offs)
+└── decisions/       # ADRs: decisions we’ve made and now live with
 ```
+
+## Start here
+
+- **Quickstart:** `guides/01-quickstart.md`
+- **Build image:** `guides/02-build-image.md`
+- **Flash image safely (SYSTEM vs DATA):** `guides/04-flash-system-nvme.md`
+- **First boot checklist:** `guides/05-first-boot-checklist.md`
+- **Contracts (what the image guarantees):** `reference/contracts.md`
+- **Tooling reference:** `reference/tooling.md`
 
 ## When to use what
 
-- **RFCs (`rfcs/`)** — explore ideas or proposals before deciding; capture options, trade-offs, and
-  open questions.
-- **ADRs (`decisions/`)** — record a decision that was made, with context, rationale, consequences,
-  and links to any originating RFC.
+- **Guides**: “do these steps in this order”
+- **Reference**: “what is the contract / what is this file / what does this script do”
+- **Runbooks**: “operationally, what do we do when X happens”
+- **Troubleshooting**: “I saw an error message; what now”
 
-## Flow
+### RFCs vs ADRs
 
-```
-Problem or Idea
-    ↓
-RFC (exploration) → Discussion → Decision
-    ↓                              ↓
-Implementation               ADR (record)
-```
+- **RFCs (`rfcs/`)** — pre-decisional exploration and field notes. Good for capturing messy reality.
+- **ADRs (`decisions/`)** — decisions that are now part of the project’s long-term constraints.
 
-## Conventions
+Conventions:
 
-- **Numbering + slugs**: `RFC-0001-descriptive-slug.md` and `ADR-0001-descriptive-slug.md`
-  (zero-padded, short hyphenated slug).
-- **Status**: RFCs use `Draft | Discussion | Accepted | Rejected | Withdrawn`; ADRs use
-  `Proposed | Accepted | Deprecated | Superseded` (with backlinks).
-- **Cross-links**: ADRs link to source RFCs/issues and any supersedes/superseded-by records; RFCs
-  link to related ADRs when promoted.
-- **Change control**: create/update RFCs and ADRs via PRs. Keep them concise; prefer follow-up ADRs
-  to massive edits.
+- Numbering + slugs:
+  - `RFC-0001-descriptive-slug.md`
+  - `ADR-0001-descriptive-slug.md`
+- Status:
+  - RFC: `Draft | Discussion | Accepted | Rejected | Withdrawn`
+  - ADR: `Proposed | Accepted | Deprecated | Superseded`
