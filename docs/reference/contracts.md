@@ -71,8 +71,29 @@ systemctl status fstrim.timer --no-pager
 ## Non-contracts (explicitly not guaranteed)
 
 * No guarantee that Wi‑Fi is configured on first boot
-* No guarantee that Kubernetes is installed (belongs to the next layer)
+* k3s is part of the OS image (as the “platform runtime”), but application manifests live elsewhere
+* The OS includes `ourbox-bootstrap.service` which brings up k3s and applies baseline manifests
+* If k3s can’t start because the kernel lacks the memory cgroup controller, the remedy is the
+  cmdline flags (see [`docs/OPS.md`](../OPS.md) troubleshooting)
 * No guarantee that the DATA disk is formatted automatically (we expect it to be labeled upfront)
+
+## Contract: Platform runtime (k3s)
+
+* `k3s` binary exists at `/usr/local/bin/k3s`
+* `k3s.service` exists and is enabled by bootstrap (or enabled directly)
+* `ourbox-bootstrap.service` exists and runs on first boot
+* Success marker: `/var/lib/ourbox/state/bootstrap.done`
+* k3s data lives under `/var/lib/ourbox/k3s`
+
+## Contract: Kernel cmdline must enable cgroup memory
+
+If `/sys/fs/cgroup/cgroup.controllers` does not include `memory`, k3s will fail with
+`failed to find memory cgroup (v2)`.
+
+Fix: add `cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1` to
+`/boot/firmware/cmdline.txt`. See [`docs/OPS.md`](../OPS.md) for the full procedure.
+
+Long-term intent: bake this into the image during build.
 
 ## Related ADRs
 

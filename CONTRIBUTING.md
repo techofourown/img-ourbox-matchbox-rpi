@@ -70,8 +70,7 @@ Also update docs if behavior changes (base Debian version, stages, etc.).
 
 ## Documentation updates
 
-If you add a new workflow:
+If you change workflow/tooling/contracts:
 
-* Add/extend a **Guide** (`docs/guides/`)
-* Add/extend any relevant **Reference** (`docs/reference/`)
-* If it’s a “new permanent rule”, consider an **ADR** (`docs/decisions/`)
+* Update **only** `docs/OPS.md` and/or `docs/reference/contracts.md`
+* Do not add new guides/runbooks/troubleshooting pages unless there is a strong reason
