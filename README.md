@@ -5,3 +5,10 @@ recipes, build tooling, and release artifacts aligned with the OurBox OS and Our
 specs.
 
 See `docs/` for RFC/ADR scaffolding.
+
+## Quickstart (Centroid registry-first)
+
+### 1) Seed the registry (one-time, from a machine that can reach DockerHub)
+```bash
+./tools/mirror-required-images.sh
+
