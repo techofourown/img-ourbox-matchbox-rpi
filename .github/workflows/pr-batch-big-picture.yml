@@ -1,0 +1,62 @@
+name: PR Batch Big Picture
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_selection:
+        description: "Comma-separated PRs and/or inclusive ranges like 123-130,135,140-142"
+        required: true
+        type: string
+      base_branch:
+        description: "Base branch to diff against"
+        default: "main"
+        required: false
+        type: string
+      remote:
+        description: "Remote name to fetch PR branches from"
+        default: "origin"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-batch-big-picture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_branch }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Generate PR comparison
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python tools/pr_batch_big_picture.py \
+            "${{ inputs.pr_selection }}" \
+            --base-branch "${{ inputs.base_branch }}" \
+            --remote "${{ inputs.remote }}" \
+            --output-dir "/tmp"
+
+      - name: Upload comparison artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-comparison-${{ github.run_id }}
+          path: |
+            /tmp/pr-*-implementation.txt
+            /tmp/pr-*-implementation-with-logs.txt
+            /tmp/pr-comparison-*.txt
+            /tmp/pr-summaries-*.txt
+            /tmp/pr-touched-files-*.txt
+            /tmp/pr-*-versus-*.txt
+            /tmp/pr-round-robin-*.txt
+          if-no-files-found: warn

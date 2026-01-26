@@ -1,0 +1,61 @@
+name: Commit Batch Big Picture
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_selection:
+        description: "Comma-separated commit SHAs and/or inclusive ranges like abc123-def456,deadbeef"
+        required: true
+        type: string
+      base_branch:
+        description: "Base branch to start from"
+        default: "main"
+        required: false
+        type: string
+      remote:
+        description: "Remote name to fetch commits from"
+        default: "origin"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  commit-batch-big-picture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_branch }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Generate commit comparison
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python tools/commit_batch_big_picture.py \
+            "${{ inputs.commit_selection }}" \
+            --base-branch "${{ inputs.base_branch }}" \
+            --remote "${{ inputs.remote }}" \
+            --output-dir "/tmp"
+
+      - name: Upload comparison artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-comparison-${{ github.run_id }}
+          path: |
+            /tmp/commit-*-implementation.txt
+            /tmp/commit-*-implementation-with-logs.txt
+            /tmp/commit-comparison-*.txt
+            /tmp/commit-summaries-*.txt
+            /tmp/commit-touched-files-*.txt
+            /tmp/commit-*-versus-*.txt
+          if-no-files-found: warn
