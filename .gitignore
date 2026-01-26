@@ -5,6 +5,7 @@
 /deploy-from-registry/
 /work/
 /tmp/
+/artifacts/
 
 # OS image artifacts
 *.img

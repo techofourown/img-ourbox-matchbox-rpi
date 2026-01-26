@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATE_DIR="/var/lib/ourbox/state"
+MARKER="${STATE_DIR}/bootstrap.done"
+
+# idempotent
+if [[ -f "$MARKER" ]]; then
+  exit 0
+fi
+
+# hard requirement for product posture: don’t bootstrap platform onto OS disk
+if ! mountpoint -q /var/lib/ourbox; then
+  echo "ERROR: /var/lib/ourbox is not mounted. Refusing to bootstrap." >&2
+  exit 1
+fi
+
+mkdir -p \
+  "$STATE_DIR" \
+  "/var/lib/ourbox/device" \
+  "/var/lib/ourbox/secrets" \
+  "/var/lib/ourbox/k3s/agent/images"
+
+# device_id (stable)
+if [[ ! -f /var/lib/ourbox/device/device_id ]]; then
+  cat /proc/sys/kernel/random/uuid > /var/lib/ourbox/device/device_id
+fi
+DEVICE_ID="$(cat /var/lib/ourbox/device/device_id)"
+
+# k3s token (stable)
+if [[ ! -f /var/lib/ourbox/secrets/k3s_token ]]; then
+  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /var/lib/ourbox/secrets/k3s_token
+  chmod 0600 /var/lib/ourbox/secrets/k3s_token
+fi
+TOKEN="$(cat /var/lib/ourbox/secrets/k3s_token)"
+
+# Write k3s config (data-dir on DATA disk)
+mkdir -p /etc/rancher/k3s
+cat > /etc/rancher/k3s/config.yaml <<EOF
+token: "${TOKEN}"
+data-dir: /var/lib/ourbox/k3s
+write-kubeconfig-mode: "0644"
+disable:
+  - servicelb
+EOF
+
+# Hydrate images: copy ALL tars into k3s agent/images BEFORE starting.
+shopt -s nullglob
+cp -f /opt/ourbox/airgap/k3s/*.tar /var/lib/ourbox/k3s/agent/images/
+cp -f /opt/ourbox/airgap/platform/images/*.tar /var/lib/ourbox/k3s/agent/images/
+shopt -u nullglob
+
+# Start k3s (enabled only after hydration prep)
+systemctl enable k3s.service
+systemctl start k3s.service
+
+# Wait for API
+for i in $(seq 1 180); do
+  if /usr/local/bin/k3s kubectl get nodes >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+/usr/local/bin/k3s kubectl get nodes >/dev/null
+
+# Apply platform demo manifests (offline)
+/usr/local/bin/k3s kubectl apply -f /opt/ourbox/airgap/platform/manifests
+
+date -Is > "$MARKER"
+echo "OurBox bootstrap complete. device_id=${DEVICE_ID}"

@@ -1,0 +1,14 @@
+[Unit]
+Description=k3s (OurBox single-node)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/k3s server --config /etc/rancher/k3s/config.yaml
+Restart=always
+RestartSec=5s
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
