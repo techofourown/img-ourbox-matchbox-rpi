@@ -16,6 +16,11 @@ NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
 DOCKER="${DOCKER:-$(pick_container_cli)}"
 export DOCKER
 
+SUDO=""
+if [[ ${EUID} -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+  SUDO="sudo -E"
+fi
+
 # If we're using nerdctl, we need buildkitd running.
 ensure_buildkitd
 
@@ -43,7 +48,12 @@ log "Preflight: verifying airgap artifacts exist"
 [[ -f "${ROOT}/artifacts/airgap/k3s/k3s-airgap-images-arm64.tar" ]] || die "missing k3s airgap tar; run ./tools/fetch-airgap-platform.sh"
 [[ -f "${ROOT}/artifacts/airgap/platform/images/${NGINX_TAR}" ]] || die "missing nginx tar; run ./tools/fetch-airgap-platform.sh"
 
-"${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox.conf"
+if [[ "$(cli_base "${DOCKER}")" == "podman" && "${DOCKER}" == *" "* && -n "${SUDO}" ]]; then
+  log "NOTE: running pi-gen under sudo with DOCKER=podman (avoids sudo-in-DOCKER quoting issues)"
+  DOCKER=podman ${SUDO} "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox.conf"
+else
+  "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox.conf"
+fi
 
 log "Postflight: validating deploy outputs"
 IMG_XZ="$(ls -1 "${ROOT}/deploy"/img-*.img.xz | head -n 1 || true)"
