@@ -58,22 +58,20 @@ imgref() {
 
 canonicalize_image_ref() {
   local ref="$1"
-  local first="${ref%%/*}"
+  # No slash => definitely not registry-qualified (it's image[:tag] or image@digest)
+  if [[ "${ref}" != */* ]]; then
+    echo "docker.io/library/${ref}"
+    return 0
+  fi
 
-  # Already qualified if first component looks like a registry (contains '.' or ':' or is localhost)
+  local first="${ref%%/*}"
+  # With a slash present, first segment can be a registry (docker.io, quay.io, localhost:5000, etc.)
   if [[ "${first}" == *"."* || "${first}" == *":"* || "${first}" == "localhost" ]]; then
     echo "${ref}"
     return 0
   fi
 
-  # Unqualified. If it already has a namespace (a/b:tag), assume docker.io/<namespace>/...
-  if [[ "${ref}" == */* ]]; then
-    echo "docker.io/${ref}"
-    return 0
-  fi
-
-  # Bare image (nginx:tag) -> docker.io/library/<image>:tag
-  echo "docker.io/library/${ref}"
+  echo "docker.io/${ref}"
 }
 
 mirror_image() {
