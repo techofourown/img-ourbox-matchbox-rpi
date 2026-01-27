@@ -9,7 +9,8 @@ source "${ROOT}/tools/lib.sh"
 source "${ROOT}/tools/registry.sh"
 # shellcheck disable=SC1091
 [ -f "${ROOT}/tools/versions.env" ] && source "${ROOT}/tools/versions.env"
-: "${NGINX_IMAGE:=nginx:1.27-alpine}"
+: "${NGINX_IMAGE:=docker.io/library/nginx:1.27-alpine}"
+NGINX_IMAGE="$(canonicalize_image_ref "${NGINX_IMAGE}")"
 NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
 
 # Pick a container CLI (caller can override with DOCKER=...)

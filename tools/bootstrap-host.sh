@@ -105,9 +105,8 @@ install_buildkit() {
 
   tmpdir="$(mktemp -d)"
 
-  # Capture the directory path now (when setting the trap), so the EXIT trap
-  # does not depend on the tmpdir variable still being in-scope later.
-  trap "rm -rf -- $(printf '%q' "${tmpdir}")" EXIT
+  # Capture the literal path now; do NOT reference the local variable at EXIT time.
+  trap 'rm -rf "'"${tmpdir}"'"' EXIT
 
   log "Downloading: ${url}"
   curl -fsSL -o "${tmpdir}/buildkit.tgz" "${url}"
