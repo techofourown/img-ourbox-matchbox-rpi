@@ -56,6 +56,26 @@ imgref() {
   echo "${REGISTRY}/${REGISTRY_NAMESPACE}/${name}:${tag}"
 }
 
+canonicalize_image_ref() {
+  local ref="$1"
+  local first="${ref%%/*}"
+
+  # Already qualified if first component looks like a registry (contains '.' or ':' or is localhost)
+  if [[ "${first}" == *"."* || "${first}" == *":"* || "${first}" == "localhost" ]]; then
+    echo "${ref}"
+    return 0
+  fi
+
+  # Unqualified. If it already has a namespace (a/b:tag), assume docker.io/<namespace>/...
+  if [[ "${ref}" == */* ]]; then
+    echo "docker.io/${ref}"
+    return 0
+  fi
+
+  # Bare image (nginx:tag) -> docker.io/library/<image>:tag
+  echo "docker.io/library/${ref}"
+}
+
 mirror_image() {
   local src="$1" dst="$2"
   local cli; cli="$(pick_container_cli)"
