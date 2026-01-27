@@ -14,7 +14,7 @@ need_cmd chmod
 need_cmd sed
 
 : "${K3S_VERSION:=}"
-: "${NGINX_IMAGE:=nginx:1.27-alpine}"
+: "${NGINX_IMAGE:=docker.io/library/nginx:1.27-alpine}"
 
 if [[ -z "${K3S_VERSION}" ]]; then
   if [[ "${RESOLVE_LATEST_K3S:-0}" == "1" ]]; then
@@ -29,6 +29,8 @@ if [[ -z "${K3S_VERSION}" ]]; then
     die "K3S_VERSION not set. Edit tools/versions.env (recommended) or export K3S_VERSION."
   fi
 fi
+
+NGINX_IMAGE="$(canonicalize_image_ref "${NGINX_IMAGE}")"
 
 log "Using K3S_VERSION=${K3S_VERSION}"
 log "Using NGINX_IMAGE=${NGINX_IMAGE}"
