@@ -104,7 +104,7 @@ install_buildkit() {
   fi
 
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf "${tmpdir}"' EXIT
+  trap "rm -rf -- $(printf '%q' "${tmpdir}")" EXIT
 
   log "Downloading: ${url}"
   curl -fsSL -o "${tmpdir}/buildkit.tgz" "${url}"

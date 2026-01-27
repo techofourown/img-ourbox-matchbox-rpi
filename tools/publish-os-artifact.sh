@@ -29,7 +29,7 @@ BLOG="${DEPLOY_DIR}/build.log"
 IMAGE="$(imgref os "${BASE}")"
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+trap "rm -rf -- $(printf '%q' "${tmp}")" EXIT
 
 cp "${IMG_XZ}" "${tmp}/os.img.xz"
 [ -f "${INFO}" ] && cp "${INFO}" "${tmp}/os.info" || true
