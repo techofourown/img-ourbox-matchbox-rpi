@@ -7,6 +7,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT}/tools/lib.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
+# shellcheck disable=SC1091
+[ -f "${ROOT}/tools/versions.env" ] && source "${ROOT}/tools/versions.env"
+: "${NGINX_IMAGE:=nginx:1.27-alpine}"
+NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
 
 # Pick a container CLI (caller can override with DOCKER=...)
 DOCKER="${DOCKER:-$(pick_container_cli)}"
@@ -37,7 +41,7 @@ export PIGEN_DOCKER_OPTS="${PIGEN_DOCKER_OPTS:-} \
 log "Preflight: verifying airgap artifacts exist"
 [[ -x "${ROOT}/artifacts/airgap/k3s/k3s" ]] || die "missing k3s binary; run ./tools/fetch-airgap-platform.sh"
 [[ -f "${ROOT}/artifacts/airgap/k3s/k3s-airgap-images-arm64.tar" ]] || die "missing k3s airgap tar; run ./tools/fetch-airgap-platform.sh"
-[[ -f "${ROOT}/artifacts/airgap/platform/images/nginx_1.27-alpine.tar" ]] || die "missing nginx tar; run ./tools/fetch-airgap-platform.sh"
+[[ -f "${ROOT}/artifacts/airgap/platform/images/${NGINX_TAR}" ]] || die "missing nginx tar; run ./tools/fetch-airgap-platform.sh"
 
 "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox.conf"
 

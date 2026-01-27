@@ -6,7 +6,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT}/tools/lib.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
+# shellcheck disable=SC1091
+[ -f "${ROOT}/tools/versions.env" ] && source "${ROOT}/tools/versions.env"
 
-# Add anything you want to keep local
+: "${BUILDKIT_VERSION:=v0.23.2}"
+
 mirror_image "docker.io/library/debian:trixie" "$(imgref mirror/debian trixie)"
-mirror_image "docker.io/moby/buildkit:v0.23.2" "$(imgref mirror/buildkit v0.23.2)"
+mirror_image "docker.io/moby/buildkit:${BUILDKIT_VERSION}" "$(imgref mirror/buildkit "${BUILDKIT_VERSION}")"

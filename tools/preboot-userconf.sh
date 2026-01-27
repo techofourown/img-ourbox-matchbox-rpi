@@ -10,13 +10,14 @@ if [ "${EUID}" -ne 0 ]; then
   exec sudo -E -- "$0" "$@"
 fi
 
-SYS_DEV="${1:-}"
+SYS_DEV_INPUT="${1:-}"
 NEW_USER="${2:-}"
 
-if [ -z "${SYS_DEV}" ] || [ -z "${NEW_USER}" ]; then
-  die "Usage: $0 <SYS_DEV> <NEW_USER>"
+if [ -z "${SYS_DEV_INPUT}" ] || [ -z "${NEW_USER}" ]; then
+  die "Usage: $0 SYS_DEV NEW_USER"
 fi
 
+SYS_DEV="$(readlink -f "${SYS_DEV_INPUT}")"
 BOOT_PART="${SYS_DEV}p1"
 MOUNT_POINT="/mnt/ourbox-boot"
 

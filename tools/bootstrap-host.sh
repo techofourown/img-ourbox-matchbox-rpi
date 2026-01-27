@@ -32,7 +32,8 @@ pkg_install_apt() {
     xz-utils \
     parted \
     util-linux \
-    coreutils
+    coreutils \
+    e2fsprogs
 
   # Podman (rootful is what we use; rootless deps included because they're cheap and reduce surprises)
   apt-get install -y \
@@ -52,6 +53,7 @@ pkg_install_dnf() {
     xz \
     parted \
     util-linux coreutils \
+    e2fsprogs \
     podman \
     fuse-overlayfs slirp4netns shadow-utils
 

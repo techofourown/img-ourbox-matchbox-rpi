@@ -15,12 +15,13 @@ SYS_DISK="${2:-}"
 DATA_PART="/dev/disk/by-label/OURBOX_DATA"
 
 if [ -z "${IMG}" ] || [ -z "${SYS_DISK}" ]; then
-  die "Usage: $0 <path-to-os.img.xz> <SYS_DISK-by-id>"
+  die "Usage: $0 PATH_TO_OS_IMG_XZ SYS_DISK"
 fi
 
 case "${SYS_DISK}" in
   /dev/disk/by-id/*) ;;
-  *) die "SYS_DISK must be a /dev/disk/by-id/... path (got: ${SYS_DISK})" ;;
+  /dev/nvme*) ;;
+  *) die "SYS_DISK must be /dev/disk/by-id/... or /dev/nvme... (got: ${SYS_DISK})" ;;
 esac
 
 need_cmd xz
@@ -44,6 +45,15 @@ xz -t "${IMG}"
 DATA_DEV="$(readlink -f "${DATA_PART}")"
 DATA_DISK="/dev/$(lsblk -no PKNAME "${DATA_DEV}")"
 SYS_DEV="$(readlink -f "${SYS_DISK}")"
+
+# Refuse if anything on SYSTEM disk is mounted (safety)
+if lsblk -nr -o MOUNTPOINT "${SYS_DEV}" | grep -qE '\S'; then
+  die "SYSTEM disk has mounted partitions. Unmount them and retry."
+fi
+
+if [[ "${SYS_DISK}" != /dev/disk/by-id/* ]]; then
+  log "WARNING: SYS_DISK is not a by-id path. by-id is preferred for safety."
+fi
 
 if [ "$(lsblk -no TYPE "${SYS_DEV}")" != "disk" ]; then
   die "SYS_DISK must resolve to a raw disk (got: ${SYS_DEV})"

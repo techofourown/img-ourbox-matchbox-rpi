@@ -6,28 +6,38 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT}/tools/lib.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
+# shellcheck disable=SC1091
+[ -f "${ROOT}/tools/versions.env" ] && source "${ROOT}/tools/versions.env"
 
 need_cmd curl
 need_cmd chmod
+need_cmd sed
 
-# Resolve K3S_VERSION if not provided
-if [[ -z "${K3S_VERSION:-}" ]]; then
-  log "K3S_VERSION not set; resolving latest from GitHub releases..."
-  K3S_VERSION="$(
-    curl -fsSLI https://github.com/k3s-io/k3s/releases/latest \
-      | tr -d '\r' \
-      | sed -n 's/^location: .*\/tag\/\(v[^ ]*\)$/\1/ip' \
-      | tail -n1
-  )"
+: "${K3S_VERSION:=}"
+: "${NGINX_IMAGE:=nginx:1.27-alpine}"
+
+if [[ -z "${K3S_VERSION}" ]]; then
+  if [[ "${RESOLVE_LATEST_K3S:-0}" == "1" ]]; then
+    log "K3S_VERSION not set; resolving latest from GitHub releases (dev only)"
+    K3S_VERSION="$(
+      curl -fsSLI https://github.com/k3s-io/k3s/releases/latest \
+        | tr -d '\r' \
+        | sed -n 's/^location: .*\/tag\/\(v[^ ]*\)$/\1/ip' \
+        | tail -n1
+    )"
+  else
+    die "K3S_VERSION not set. Edit tools/versions.env (recommended) or export K3S_VERSION."
+  fi
 fi
 
-[[ -n "${K3S_VERSION}" ]] || die "K3S_VERSION resolution failed"
-[[ "${K3S_VERSION}" != "vX.Y.Z+k3s1" ]] || die "K3S_VERSION is a placeholder; set it or let the script resolve latest"
-
 log "Using K3S_VERSION=${K3S_VERSION}"
+log "Using NGINX_IMAGE=${NGINX_IMAGE}"
 
 OUT="artifacts/airgap"
 mkdir -p "$OUT/k3s" "$OUT/platform/images"
+
+# Consistent tar name derived from image ref
+NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
 
 log "Fetch k3s binary (arm64) @ ${K3S_VERSION}"
 curl -fsSL \
@@ -43,25 +53,25 @@ curl -fsSL \
 CLI="$(pick_container_cli)"
 log "Using container CLI: ${CLI}"
 
-log "Pull + save demo image (arm64): nginx:1.27-alpine"
+log "Pull + save demo image (arm64): ${NGINX_IMAGE}"
 
 case "$(cli_base "${CLI}")" in
   nerdctl|docker)
     # shellcheck disable=SC2086
-    $CLI pull --platform=linux/arm64 nginx:1.27-alpine
+    $CLI pull --platform=linux/arm64 "${NGINX_IMAGE}"
     if [[ "$(cli_base "${CLI}")" = "nerdctl" ]]; then
       # shellcheck disable=SC2086
-      $CLI save --platform=linux/arm64 -o "$OUT/platform/images/nginx_1.27-alpine.tar" nginx:1.27-alpine
+      $CLI save --platform=linux/arm64 -o "$OUT/platform/images/${NGINX_TAR}" "${NGINX_IMAGE}"
     else
       # shellcheck disable=SC2086
-      $CLI save -o "$OUT/platform/images/nginx_1.27-alpine.tar" nginx:1.27-alpine
+      $CLI save -o "$OUT/platform/images/${NGINX_TAR}" "${NGINX_IMAGE}"
     fi
     ;;
   podman)
     # shellcheck disable=SC2086
-    $CLI pull --arch=arm64 --os=linux nginx:1.27-alpine
+    $CLI pull --arch=arm64 --os=linux "${NGINX_IMAGE}"
     # shellcheck disable=SC2086
-    $CLI save -o "$OUT/platform/images/nginx_1.27-alpine.tar" nginx:1.27-alpine
+    $CLI save -o "$OUT/platform/images/${NGINX_TAR}" "${NGINX_IMAGE}"
     ;;
   *)
     die "Unsupported container CLI: ${CLI}"
@@ -71,7 +81,7 @@ esac
 log "Writing airgap manifest"
 cat > "$OUT/manifest.env" <<EOF_MANIFEST
 K3S_VERSION=${K3S_VERSION}
-NGINX_IMAGE=nginx:1.27-alpine
+NGINX_IMAGE=${NGINX_IMAGE}
 EOF_MANIFEST
 
 log "Artifacts created:"

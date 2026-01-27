@@ -58,4 +58,8 @@ log ">> Pushing: ${IMAGE}"
 # shellcheck disable=SC2086
 $CLI push "${IMAGE}"
 
+REF_FILE="${DEPLOY_DIR}/os-artifact.ref"
+echo "${IMAGE}" > "${REF_FILE}"
+log "Wrote image ref: ${REF_FILE}"
+
 log "DONE: ${IMAGE}"

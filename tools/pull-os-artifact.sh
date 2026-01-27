@@ -9,8 +9,20 @@ source "${ROOT}/tools/registry.sh"
 
 CLI="$(pick_container_cli)"
 
-IMAGE="${1:?Usage: $0 <registry-image-ref> [outdir]}"
-OUTDIR="${2:-deploy-from-registry}"
+if [[ "${1:-}" == "--latest" ]]; then
+  shift
+  OUTDIR="${1:-deploy-from-registry}"
+
+  if [[ -f deploy/os-artifact.ref ]]; then
+    IMAGE="$(cat deploy/os-artifact.ref)"
+  else
+    die "deploy/os-artifact.ref not found. Run ./tools/publish-os-artifact.sh deploy first, or pass IMAGE_REF explicitly."
+  fi
+else
+  IMAGE="${1:-}"
+  OUTDIR="${2:-deploy-from-registry}"
+  [[ -n "${IMAGE}" ]] || die "Usage: $0 IMAGE_REF [OUTDIR]  or  $0 --latest [OUTDIR]"
+fi
 
 # Make sure we can pull
 log ">> Pull: ${IMAGE}"
