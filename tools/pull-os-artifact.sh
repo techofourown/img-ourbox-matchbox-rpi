@@ -13,10 +13,11 @@ if [[ "${1:-}" == "--latest" ]]; then
   shift
   OUTDIR="${1:-deploy-from-registry}"
 
-  if [[ -f deploy/os-artifact.ref ]]; then
-    IMAGE="$(cat deploy/os-artifact.ref)"
+  REF_FILE="${ROOT}/deploy/os-artifact.ref"
+  if [[ -f "${REF_FILE}" ]]; then
+    IMAGE="$(cat "${REF_FILE}")"
   else
-    die "deploy/os-artifact.ref not found. Run ./tools/publish-os-artifact.sh deploy first, or pass IMAGE_REF explicitly."
+    die "${REF_FILE} not found. Run ./tools/publish-os-artifact.sh deploy first, or pass IMAGE_REF explicitly."
   fi
 else
   IMAGE="${1:-}"

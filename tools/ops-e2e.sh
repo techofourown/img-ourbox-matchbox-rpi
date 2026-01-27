@@ -11,7 +11,6 @@ source "${ROOT}/tools/registry.sh"
 [ -f "${ROOT}/tools/versions.env" ] && source "${ROOT}/tools/versions.env"
 
 need_cmd lsblk
-need_cmd findmnt
 need_cmd readlink
 need_cmd sed
 need_cmd awk
@@ -62,15 +61,11 @@ prompt_nonempty() {
   echo "${ans}"
 }
 
-root_source() {
-  findmnt -n -o SOURCE / 2>/dev/null || true
-}
-
 ensure_not_booted_from_nvme() {
-  local src
-  src="$(root_source)"
-  if [[ "${src}" == /dev/nvme* ]]; then
-    die "root filesystem is on ${src}. Boot from SD/USB before flashing NVMe."
+  # Robust even when findmnt reports /dev/root.
+  if lsblk -nr -o NAME,MOUNTPOINT \
+    | awk '$2=="/" && $1 ~ /^nvme/ {exit 0} END{exit 1}'; then
+    die "root filesystem is on an NVMe device. Boot from SD/USB before flashing NVMe."
   fi
 }
 
@@ -235,6 +230,14 @@ main() {
   export DOCKER="${DOCKER:-$(pick_container_cli)}"
   log "Using container CLI: ${DOCKER}"
 
+  # Common after a failed pi-gen run: container name collision.
+  # Offer to clean it up so reruns are reliable.
+  if $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'pigen_work'; then
+    log "Found existing container: pigen_work (likely from a previous failed build)"
+    prompt_confirm_exact "CLEAN" "Type CLEAN to remove pigen_work and continue:"
+    $DOCKER rm -f -v pigen_work >/dev/null 2>&1 || true
+  fi
+
   # Enforce pinned versions
   [[ -n "${K3S_VERSION:-}" ]] || die "K3S_VERSION not set; check tools/versions.env"
   [[ -n "${NGINX_IMAGE:-}" ]] || die "NGINX_IMAGE not set; check tools/versions.env"
@@ -290,6 +293,11 @@ main() {
   ddisk="$(parent_disk_of_part "${dpart}")"
   if [[ "${ddisk}" != /dev/nvme* ]]; then
     die "OURBOX_DATA label is not on an NVMe disk (${ddisk}); refusing for safety"
+  fi
+  local fstype
+  fstype="$(lsblk -no FSTYPE "${dpart}" 2>/dev/null || true)"
+  if [[ "${fstype}" != "ext4" ]]; then
+    die "DATA disk ${dpart} has LABEL=OURBOX_DATA but FSTYPE=${fstype:-unknown}. Contract requires ext4."
   fi
 
   # SYSTEM disk is the other NVMe disk

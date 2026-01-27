@@ -172,7 +172,7 @@ main() {
   verify_tools
 
   log "Bootstrap complete."
-  log "Next (in your shell): export DOCKER=\"sudo podman\""
+  log "Next: run ./tools/ops-e2e.sh"
 }
 
 main "$@"

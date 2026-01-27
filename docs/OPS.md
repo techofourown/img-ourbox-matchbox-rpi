@@ -176,5 +176,3 @@ sudo raspi-config
 ### Registry TLS / unknown CA
 
 Skip registry and flash locally (the end-to-end script does not require registry).
-
-```
