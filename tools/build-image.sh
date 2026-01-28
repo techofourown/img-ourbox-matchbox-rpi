@@ -5,6 +5,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # shellcheck disable=SC1091
 source "${ROOT}/tools/lib.sh"
+
+# Always operate from repo root so any relative paths (including vendor/pi-gen) are stable.
+cd "${ROOT}"
+
+# pi-gen's docker wrapper writes logs to ./deploy (e.g. deploy/build-docker.log).
+# On a fresh clone, deploy/ may not exist; create it up-front so the build can't fail at the end.
+mkdir -p "${ROOT}/deploy"
+log "Ensured deploy dir exists: ${ROOT}/deploy"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
 # shellcheck disable=SC1091
