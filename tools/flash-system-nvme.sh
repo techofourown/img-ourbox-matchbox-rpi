@@ -30,6 +30,8 @@ need_cmd dd
 need_cmd lsblk
 need_cmd readlink
 need_cmd partprobe
+need_cmd wipefs
+need_cmd blockdev
 
 if [ ! -e "${DATA_PART}" ]; then
   die "DATA disk not found: ${DATA_PART}"
@@ -55,8 +57,9 @@ if [[ "${SYS_DISK}" != /dev/disk/by-id/* ]]; then
   log "WARNING: SYS_DISK is not a by-id path. by-id is preferred for safety."
 fi
 
-if [ "$(lsblk -no TYPE "${SYS_DEV}")" != "disk" ]; then
-  die "SYS_DISK must resolve to a raw disk (got: ${SYS_DEV})"
+SYS_TYPE="$(lsblk -dn -o TYPE "${SYS_DEV}" 2>/dev/null | head -n 1 | tr -d '[:space:]')"
+if [[ "${SYS_TYPE}" != "disk" ]]; then
+  die "SYS_DISK must resolve to a raw disk (got: ${SYS_DEV}, type=${SYS_TYPE:-unknown})"
 fi
 
 log "IMG=${IMG}"
@@ -75,6 +78,29 @@ fi
 
 read -r -p "Type FLASH (all caps) to erase and flash ${SYS_DEV}: " ans
 [ "${ans}" = "FLASH" ]
+
+log "Wiping SYSTEM disk signatures/partition tables so flashing starts from a known blank state: ${SYS_DEV}"
+
+if command -v blkdiscard >/dev/null 2>&1; then
+  log "blkdiscard (best-effort): ${SYS_DEV}"
+  blkdiscard -f "${SYS_DEV}" >/dev/null 2>&1 || true
+fi
+
+log "wipefs (best-effort): ${SYS_DEV}"
+wipefs -a "${SYS_DEV}" >/dev/null 2>&1 || true
+
+ZERO_MIB="${ZERO_MIB:-32}"
+log "Zeroing first ${ZERO_MIB}MiB of ${SYS_DEV}"
+dd if=/dev/zero of="${SYS_DEV}" bs=1M count="${ZERO_MIB}" conv=fsync status=progress
+
+size_bytes="$(blockdev --getsize64 "${SYS_DEV}")"
+total_mib="$((size_bytes / 1024 / 1024))"
+if (( total_mib > ZERO_MIB )); then
+  seek_mib="$((total_mib - ZERO_MIB))"
+  log "Zeroing last ${ZERO_MIB}MiB of ${SYS_DEV}"
+  dd if=/dev/zero of="${SYS_DEV}" bs=1M count="${ZERO_MIB}" seek="${seek_mib}" conv=fsync status=progress
+fi
+sync
 
 log "Flashing ${IMG} -> ${SYS_DEV}"
 xzcat "${IMG}" | dd of="${SYS_DEV}" bs=4M conv=fsync status=progress
