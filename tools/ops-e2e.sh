@@ -328,7 +328,7 @@ main() {
   unmount_anything_on_disk "${sys_disk}"
 
   log "Flashing SYSTEM NVMe"
-  "${ROOT}/tools/flash-system-nvme.sh" "${flash_img}" "${sys_byid}"
+  "${ROOT}/tools/flash-system-nvme.sh" "${flash_img}" "${sys_byid}" || die "flash failed; refusing to continue"
 
   echo
   local default_user="${SUDO_USER:-$(whoami)}"
