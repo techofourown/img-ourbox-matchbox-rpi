@@ -1,3 +1,10 @@
+## [0.1.3](https://github.com/techofourown/img-ourbox-mini-rpi/compare/v0.1.2...v0.1.3) (2026-01-29)
+
+
+### Bug Fixes
+
+* gate DATA state before flashing ([c51293c](https://github.com/techofourown/img-ourbox-mini-rpi/commit/c51293ccead5728788b9a763361ecdb51d287d46))
+
 ## [0.1.2](https://github.com/techofourown/img-ourbox-mini-rpi/compare/v0.1.1...v0.1.2) (2026-01-28)
 
 
