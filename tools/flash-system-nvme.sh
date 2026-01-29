@@ -12,7 +12,6 @@ fi
 
 IMG="${1:-}"
 SYS_DISK="${2:-}"
-DATA_PART="/dev/disk/by-label/OURBOX_DATA"
 
 if [ -z "${IMG}" ] || [ -z "${SYS_DISK}" ]; then
   die "Usage: $0 PATH_TO_OS_IMG_XZ SYS_DISK"
@@ -32,9 +31,11 @@ need_cmd readlink
 need_cmd partprobe
 need_cmd wipefs
 need_cmd blockdev
+need_cmd blkid
 
-if [ ! -e "${DATA_PART}" ]; then
-  die "DATA disk not found: ${DATA_PART}"
+DATA_PART="$(blkid -L OURBOX_DATA 2>/dev/null || true)"
+if [ -z "${DATA_PART}" ] || [ ! -e "${DATA_PART}" ]; then
+  die "DATA disk not found by LABEL=OURBOX_DATA (blkid -L OURBOX_DATA returned nothing)"
 fi
 
 if [ ! -f "${IMG}" ]; then

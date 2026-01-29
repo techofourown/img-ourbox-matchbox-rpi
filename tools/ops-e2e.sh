@@ -19,6 +19,7 @@ need_cmd mount
 need_cmd umount
 need_cmd mountpoint
 need_cmd find
+need_cmd blkid
 
 SUDO=""
 if [[ ${EUID} -ne 0 ]]; then
@@ -90,11 +91,7 @@ show_nvme_summary() {
 }
 
 data_part_by_label() {
-  if [[ -e /dev/disk/by-label/OURBOX_DATA ]]; then
-    readlink -f /dev/disk/by-label/OURBOX_DATA
-  else
-    echo ""
-  fi
+  resolve_label OURBOX_DATA
 }
 
 parent_disk_of_part() {
@@ -150,7 +147,9 @@ inspect_data_partition() {
   fi
 
   # consider "non-empty" if anything besides lost+found exists at the top level
-  if ${SUDO} find "${DATA_CHECK_MP}" -mindepth 1 -maxdepth 1 ! -name lost+found -print -quit >/dev/null 2>&1; then
+  local found=""
+  found="$(${SUDO} find "${DATA_CHECK_MP}" -mindepth 1 -maxdepth 1 ! -name lost+found -print -quit 2>/dev/null)"
+  if [[ -n "${found}" ]]; then
     DATA_HAS_CONTENT=1
   fi
 
@@ -294,6 +293,20 @@ init_data_disk_ext4_labeled() {
 
   local part="${disk}p1"
   ${SUDO} mkfs.ext4 -F -L OURBOX_DATA "${part}"
+  sync
+
+  local label=""
+  label="$(${SUDO} blkid -o value -s LABEL "${part}" 2>/dev/null || true)"
+  [[ "${label}" == "OURBOX_DATA" ]] || die "mkfs completed but LABEL is not OURBOX_DATA on ${part} (got: ${label:-<empty>})"
+
+  local resolved=""
+  resolved="$(resolve_label OURBOX_DATA)"
+  [[ -n "${resolved}" ]] || die "DATA label OURBOX_DATA not resolvable after format (udev/blkid issue)"
+
+  # extra safety: ensure it resolves to the disk we just formatted
+  if [[ "$(readlink -f "${resolved}")" != "$(readlink -f "${part}")" ]]; then
+    die "OURBOX_DATA resolves to ${resolved}, expected ${part}. Refusing (duplicate labels or stale state)."
+  fi
 
   log "DATA disk initialized: ${part} (LABEL=OURBOX_DATA)"
   echo
@@ -468,7 +481,7 @@ main() {
 
   # If ERASE-DATA occurred, the label/partition may have changed; re-resolve for correctness.
   dpart="$(data_part_by_label)"
-  [[ -n "${dpart}" ]] || die "DATA disk missing after DATA disk action"
+  [[ -n "${dpart}" ]] || die "DATA disk LABEL=OURBOX_DATA not resolvable after DATA disk action (udev/blkid not updated). Refusing to continue to protect DATA disk."
   ddisk="$(parent_disk_of_part "${dpart}")"
   if [[ "${ddisk}" != /dev/nvme* ]]; then
     die "OURBOX_DATA label is not on an NVMe disk (${ddisk}); refusing for safety"
