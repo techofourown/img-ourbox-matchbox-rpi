@@ -14,9 +14,9 @@ ensure_buildkitd
 
 DEPLOY_DIR="${1:-deploy}"
 
-IMG_XZ="$(ls -1 "${DEPLOY_DIR}"/img-*.img.xz | head -n 1)"
+IMG_XZ="$(ls -1t "${DEPLOY_DIR}"/img-*.img.xz 2>/dev/null | head -n 1 || true)"
 if [ -z "${IMG_XZ}" ] || [ ! -f "${IMG_XZ}" ]; then
-  die "No deploy/img-*.img.xz found. Did the build finish and deploy get copied out?"
+  die "No ${DEPLOY_DIR}/img-*.img.xz found. Did the build finish?"
 fi
 
 BASE="$(basename "${IMG_XZ}" .img.xz)"

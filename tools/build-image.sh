@@ -22,6 +22,9 @@ fi
 
 [[ -w "${ROOT}/deploy" ]] || die "deploy/ is not writable: ${ROOT}/deploy (fix ownership/permissions and rerun)"
 log "Ensured deploy dir exists: ${ROOT}/deploy"
+# Marker to detect build outputs from this run (prevents stale artifacts).
+BUILD_MARKER="${ROOT}/deploy/.build-start"
+: > "${BUILD_MARKER}"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
 # shellcheck disable=SC1091
@@ -73,14 +76,55 @@ else
   "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox.conf"
 fi
 
+# Normalize outputs into deploy/ (pi-gen can drop artifacts in repo root).
+log "Collecting build artifacts into ${ROOT}/deploy (normalizing pi-gen output paths)"
+
+move_into_deploy() {
+  local src="$1"
+  local dst="${ROOT}/deploy/$(basename "${src}")"
+
+  if mv -f "${src}" "${dst}" 2>/dev/null; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    sudo mv -f "${src}" "${dst}"
+    return 0
+  fi
+  die "Failed to move ${src} -> ${dst} (permission denied; sudo not available)"
+}
+
+shopt -s nullglob
+for f in "${ROOT}"/img-*; do
+  [[ -f "${f}" ]] || continue
+  [[ "${f}" -nt "${BUILD_MARKER}" ]] || continue
+
+  case "${f}" in
+    *.img.xz|*.img|*.zip|*.info|*.bmap|*.sha256)
+      log "Moving artifact: $(basename "${f}") -> deploy/"
+      move_into_deploy "${f}"
+      ;;
+  esac
+done
+shopt -u nullglob
+
+# build.log often lands at repo root; copy it into deploy/ for publishing convenience.
+if [[ -f "${ROOT}/build.log" && "${ROOT}/build.log" -nt "${BUILD_MARKER}" ]]; then
+  if cp -f "${ROOT}/build.log" "${ROOT}/deploy/build.log" 2>/dev/null; then
+    :
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo cp -f "${ROOT}/build.log" "${ROOT}/deploy/build.log" >/dev/null 2>&1 || true
+  fi
+fi
+
 # Normalize ownership so subsequent tools (publish, etc.) can write into deploy/ without sudo.
 if command -v sudo >/dev/null 2>&1; then
   sudo chown -R "$(id -u):$(id -g)" "${ROOT}/deploy" >/dev/null 2>&1 || true
 fi
 
 log "Postflight: validating deploy outputs"
-IMG_XZ="$(ls -1 "${ROOT}/deploy"/img-*.img.xz | head -n 1 || true)"
+IMG_XZ="$(ls -1t "${ROOT}/deploy"/img-*.img.xz 2>/dev/null | head -n 1 || true)"
 [[ -n "${IMG_XZ}" && -f "${IMG_XZ}" ]] || die "build did not produce deploy/img-*.img.xz"
+[[ "${IMG_XZ}" -nt "${BUILD_MARKER}" ]] || die "deploy/img-*.img.xz exists but is not from this build (stale artifact)"
 
 need_cmd xz
 xz -t "${IMG_XZ}"
