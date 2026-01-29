@@ -9,6 +9,18 @@ single-node k3s runtime via `ourbox-bootstrap`.
 
 - Operator runbook: [`docs/OPS.md`](./docs/OPS.md)
 - Contracts reference: [`docs/reference/contracts.md`](./docs/reference/contracts.md)
+- OurBox hardware naming (Model → Trim → SKU): [`hw/README.md`](./hw/README.md)
+
+## OurBox hardware identifiers
+
+OurBox naming uses **Model → Trim → SKU**, where:
+
+- **Model** = size/form-factor class (physical contract).
+- **Trim** = intent label.
+- **SKU** = exact BOM + software build, including incidental variants like color, capacity, or vendor.
+
+SKU identifiers are manufacturer part numbers and **must** begin with `TOO-`, for example
+`TOO-OBX-MBX-BASE-001` or `TOO-OBX-TBX-FORGE-001`.
 
 ## Happy path (build → publish → flash → boot)
 
