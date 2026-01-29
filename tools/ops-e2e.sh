@@ -15,6 +15,10 @@ need_cmd readlink
 need_cmd sed
 need_cmd awk
 need_cmd git
+need_cmd mount
+need_cmd umount
+need_cmd mountpoint
+need_cmd find
 
 SUDO=""
 if [[ ${EUID} -ne 0 ]]; then
@@ -108,6 +112,142 @@ unmount_anything_on_disk() {
   done < <(lsblk -nr -o NAME,MOUNTPOINT "${disk}" | awk 'NF==2 && $2!="" {print $1, $2}')
 }
 
+DATA_CHECK_MP="/tmp/ourbox-data-check"
+
+cleanup_data_check_mp() {
+  if mountpoint -q "${DATA_CHECK_MP}"; then
+    ${SUDO} umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup_data_check_mp EXIT
+
+inspect_data_partition() {
+  local part="$1"
+
+  DATA_HAS_CONTENT=0
+  DATA_BOOTSTRAP_DONE_TS=""
+  DATA_DEVICE_ID=""
+
+  mkdir -p "${DATA_CHECK_MP}"
+  if mountpoint -q "${DATA_CHECK_MP}"; then
+    ${SUDO} umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  fi
+
+  # Try a truly non-destructive read-only mount (no journal replay).
+  if ! ${SUDO} mount -t ext4 -o ro,noload "${part}" "${DATA_CHECK_MP}" >/dev/null 2>&1; then
+    # Fallback: ro mount if noload isn't supported for some reason.
+    ${SUDO} mount -t ext4 -o ro "${part}" "${DATA_CHECK_MP}" >/dev/null 2>&1 || return 1
+  fi
+
+  # bootstrap marker
+  if [[ -f "${DATA_CHECK_MP}/state/bootstrap.done" ]]; then
+    DATA_BOOTSTRAP_DONE_TS="$(cat "${DATA_CHECK_MP}/state/bootstrap.done" 2>/dev/null || true)"
+  fi
+
+  # optional nice-to-have for operator visibility
+  if [[ -f "${DATA_CHECK_MP}/device/device_id" ]]; then
+    DATA_DEVICE_ID="$(cat "${DATA_CHECK_MP}/device/device_id" 2>/dev/null || true)"
+  fi
+
+  # consider "non-empty" if anything besides lost+found exists at the top level
+  if ${SUDO} find "${DATA_CHECK_MP}" -mindepth 1 -maxdepth 1 ! -name lost+found -print -quit >/dev/null 2>&1; then
+    DATA_HAS_CONTENT=1
+  fi
+
+  ${SUDO} umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  return 0
+}
+
+reset_data_bootstrap_marker() {
+  local part="$1"
+
+  mkdir -p "${DATA_CHECK_MP}"
+  if mountpoint -q "${DATA_CHECK_MP}"; then
+    ${SUDO} umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  fi
+
+  ${SUDO} mount -t ext4 -o rw "${part}" "${DATA_CHECK_MP}"
+
+  if [[ -f "${DATA_CHECK_MP}/state/bootstrap.done" ]]; then
+    ${SUDO} rm -f "${DATA_CHECK_MP}/state/bootstrap.done"
+  fi
+
+  sync
+  ${SUDO} umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+
+  log "Reset bootstrap marker on DATA: removed /state/bootstrap.done"
+}
+
+gate_on_existing_data_state() {
+  local dpart="$1"
+  local ddisk="$2"
+
+  # Best-effort: ensure nothing else is mounted from this disk (avoids mount failures).
+  unmount_anything_on_disk "${ddisk}"
+
+  # Defaults
+  DATA_HAS_CONTENT=0
+  DATA_BOOTSTRAP_DONE_TS=""
+  DATA_DEVICE_ID=""
+
+  if ! inspect_data_partition "${dpart}"; then
+    die "Could not inspect DATA partition contents (${dpart}). Refusing to proceed (would be unsafe)."
+  fi
+
+  # Only gate if there's meaningful content
+  if [[ "${DATA_HAS_CONTENT}" -eq 1 ]]; then
+    echo
+    echo "=================================================================="
+    echo "DATA disk is NOT empty"
+    echo "=================================================================="
+    echo
+    echo "DATA partition: ${dpart}"
+    echo "DATA disk     : ${ddisk}"
+    [[ -n "${DATA_DEVICE_ID}" ]] && echo "device_id     : ${DATA_DEVICE_ID}"
+    [[ -n "${DATA_BOOTSTRAP_DONE_TS}" ]] && echo "bootstrap.done: ${DATA_BOOTSTRAP_DONE_TS}"
+    echo
+
+    if [[ -n "${DATA_BOOTSTRAP_DONE_TS}" ]]; then
+      echo "This DATA disk was previously bootstrapped."
+      echo "If you flash a NEW SYSTEM disk and keep this DATA disk as-is:"
+      echo "  - ourbox-bootstrap will be skipped"
+      echo "  - k3s will remain disabled and the platform will NOT auto-start"
+      echo
+      echo "Recommended: RESET-BOOTSTRAP (preserves data, re-runs bootstrap on next boot)."
+    else
+      echo "This DATA disk contains files, but has no bootstrap.done marker."
+      echo "Bootstrapping may overwrite or conflict with existing contents."
+      echo
+      echo "Recommended: ERASE-DATA (fresh start)."
+    fi
+
+    echo
+    echo "Choose one:"
+    echo "  RESET-BOOTSTRAP  (recommended when re-flashing SYSTEM but preserving DATA)"
+    echo "  ERASE-DATA       (DESTROYS the entire DATA NVMe disk)"
+    echo "  KEEP-DATA        (NOT recommended; expect k3s not to auto-start)"
+    echo
+
+    local ans=""
+    read -r -p "Type RESET-BOOTSTRAP, ERASE-DATA, or KEEP-DATA: " ans
+    case "${ans}" in
+      RESET-BOOTSTRAP)
+        reset_data_bootstrap_marker "${dpart}"
+        ;;
+      ERASE-DATA)
+        init_data_disk_ext4_labeled "${ddisk}"
+        ;;
+      KEEP-DATA)
+        log "Keeping DATA disk untouched (operator chose KEEP-DATA)."
+        log "NOTE: If bootstrap.done exists, k3s will not auto-start after flashing."
+        ;;
+      *)
+        die "invalid choice: ${ans}"
+        ;;
+    esac
+  fi
+}
+
 init_data_disk_ext4_labeled() {
   local disk="$1"
 
@@ -115,6 +255,8 @@ init_data_disk_ext4_labeled() {
   need_cmd mkfs.ext4
   need_cmd partprobe
   need_cmd wipefs
+  need_cmd dd
+  need_cmd blockdev
 
   log "About to DESTROY and initialize DATA disk: ${disk}"
   unmount_anything_on_disk "${disk}"
@@ -124,7 +266,28 @@ init_data_disk_ext4_labeled() {
   echo "This will erase EVERYTHING on ${disk} and create a single ext4 partition labeled OURBOX_DATA."
   prompt_confirm_exact "ERASE-DATA" "Type ERASE-DATA to continue:"
 
-  ${SUDO} wipefs -a "${disk}" || true
+  # Strong wipe so we start from a known blank state (disk-level, not partition-level).
+  if command -v blkdiscard >/dev/null 2>&1; then
+    log "blkdiscard (best-effort): ${disk}"
+    ${SUDO} blkdiscard -f "${disk}" >/dev/null 2>&1 || true
+  fi
+
+  log "wipefs (best-effort): ${disk}"
+  ${SUDO} wipefs -a "${disk}" >/dev/null 2>&1 || true
+
+  ZERO_MIB="${ZERO_MIB:-32}"
+  log "Zeroing first ${ZERO_MIB}MiB of ${disk}"
+  ${SUDO} dd if=/dev/zero of="${disk}" bs=1M count="${ZERO_MIB}" conv=fsync status=progress
+
+  size_bytes="$(${SUDO} blockdev --getsize64 "${disk}")"
+  total_mib="$((size_bytes / 1024 / 1024))"
+  if (( total_mib > ZERO_MIB )); then
+    seek_mib="$((total_mib - ZERO_MIB))"
+    log "Zeroing last ${ZERO_MIB}MiB of ${disk}"
+    ${SUDO} dd if=/dev/zero of="${disk}" bs=1M count="${ZERO_MIB}" seek="${seek_mib}" conv=fsync status=progress
+  fi
+  sync
+
   ${SUDO} parted -s "${disk}" mklabel gpt
   ${SUDO} parted -s "${disk}" mkpart primary ext4 1MiB 100%
   ${SUDO} partprobe "${disk}" || true
@@ -295,6 +458,21 @@ main() {
     die "OURBOX_DATA label is not on an NVMe disk (${ddisk}); refusing for safety"
   fi
   local fstype
+  fstype="$(lsblk -no FSTYPE "${dpart}" 2>/dev/null || true)"
+  if [[ "${fstype}" != "ext4" ]]; then
+    die "DATA disk ${dpart} has LABEL=OURBOX_DATA but FSTYPE=${fstype:-unknown}. Contract requires ext4."
+  fi
+
+  # DATA disk sanity: if it contains prior state, force operator decision before flashing.
+  gate_on_existing_data_state "${dpart}" "${ddisk}"
+
+  # If ERASE-DATA occurred, the label/partition may have changed; re-resolve for correctness.
+  dpart="$(data_part_by_label)"
+  [[ -n "${dpart}" ]] || die "DATA disk missing after DATA disk action"
+  ddisk="$(parent_disk_of_part "${dpart}")"
+  if [[ "${ddisk}" != /dev/nvme* ]]; then
+    die "OURBOX_DATA label is not on an NVMe disk (${ddisk}); refusing for safety"
+  fi
   fstype="$(lsblk -no FSTYPE "${dpart}" 2>/dev/null || true)"
   if [[ "${fstype}" != "ext4" ]]; then
     die "DATA disk ${dpart} has LABEL=OURBOX_DATA but FSTYPE=${fstype:-unknown}. Contract requires ext4."
