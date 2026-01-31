@@ -1,3 +1,10 @@
+## [0.1.4](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.1.3...v0.1.4) (2026-01-31)
+
+
+### Bug Fixes
+
+* fail fast when NVMe in use ([4733b0c](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/4733b0c75d906ec8b723699f93273a2a2c4c693a))
+
 ## [0.1.3](https://github.com/techofourown/img-ourbox-mini-rpi/compare/v0.1.2...v0.1.3) (2026-01-29)
 
 
