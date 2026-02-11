@@ -456,8 +456,11 @@ newest_img_xz() {
 
   local base
   base="$(basename "${img}")"
-  [[ "${base}" != installer-* && "${base}" != *installer* ]] || die "selected image is an installer artifact, not OS payload: ${img}"
-  [[ "${base}" == img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz ]] || die "selected image does not match expected OS pattern img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz: ${img}"
+  # We already selected using an OS-only glob:
+  #   img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz
+  # Do not reject substring "installer" here; valid variant/version names may include it.
+  [[ "${base}" == img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz ]] \
+    || die "selected image does not match expected OS pattern img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz: ${img}"
 
   echo "${img}"
 }
