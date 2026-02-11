@@ -1,3 +1,10 @@
+## [0.1.5](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.1.4...v0.1.5) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ops-e2e:** stop rejecting OS images containing installer substring ([886086c](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/886086c21648638ac2b06f372c9617efa1406f2b))
+
 ## [0.1.4](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.1.3...v0.1.4) (2026-01-31)
 
 
