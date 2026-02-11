@@ -1,3 +1,10 @@
+# [0.2.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.1.5...v0.2.0) (2026-02-11)
+
+
+### Features
+
+* **installer-media:** require interactive USB target selection ([01fe9fc](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/01fe9fc9b3bc31bd5b8a0ab8af975279f9baff0b))
+
 ## [0.1.5](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.1.4...v0.1.5) (2026-02-11)
 
 
