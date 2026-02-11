@@ -9,9 +9,11 @@ cp -a "${SCRIPT_DIR}/files/." "${ROOTFS_DIR}/"
 
 install -d -m 0755 "${ROOTFS_DIR}/opt/ourbox/installer"
 
-payload="$(ls -1t /ourbox/deploy/img-ourbox-matchbox-rpi-*.img.xz 2>/dev/null | head -n 1 || true)"
+target="${OURBOX_TARGET:-rpi}"
+payload_glob="/ourbox/deploy/img-ourbox-matchbox-${target,,}-*.img.xz"
+payload="$(ls -1t ${payload_glob} 2>/dev/null | head -n 1 || true)"
 [[ -n "${payload}" && -f "${payload}" ]] || {
-  echo "ERROR: no target OS payload found at /ourbox/deploy/img-ourbox-matchbox-rpi-*.img.xz" >&2
+  echo "ERROR: no target OS payload found at ${payload_glob}" >&2
   exit 1
 }
 

@@ -14,13 +14,14 @@ TARGET_DEV="$1"
 "${ROOT}/tools/bootstrap-host.sh"
 "${ROOT}/tools/fetch-airgap-platform.sh"
 
+: "${OURBOX_TARGET:=rpi}"
 : "${OURBOX_VARIANT:=dev}"
 : "${OURBOX_VERSION:=dev}"
 OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-image.sh"
 
 OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-installer-image.sh"
 
-installer_img="$(ls -1t "${ROOT}"/deploy/img-ourbox-matchbox-installer-rpi-*.img.xz 2>/dev/null | head -n 1 || true)"
+installer_img="$(ls -1t "${ROOT}"/deploy/installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
 [[ -n "${installer_img}" && -f "${installer_img}" ]] || die "no installer image found in deploy/"
 
 "${ROOT}/tools/flash-installer-media.sh" "${installer_img}" "${TARGET_DEV}"

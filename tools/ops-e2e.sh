@@ -10,6 +10,8 @@ source "${ROOT}/tools/registry.sh"
 # shellcheck disable=SC1091
 [ -f "${ROOT}/tools/versions.env" ] && source "${ROOT}/tools/versions.env"
 
+: "${OURBOX_TARGET:=rpi}"
+
 need_cmd lsblk
 need_cmd readlink
 need_cmd sed
@@ -448,9 +450,17 @@ byid_for_disk() {
 }
 
 newest_img_xz() {
-  local img=""
-  img="$(ls -1t "${ROOT}/deploy"/img-*.img.xz 2>/dev/null | head -n 1 || true)"
-  [[ -n "${img}" && -f "${img}" ]] || die "no deploy/img-*.img.xz found; build likely failed"
+  local img_glob img
+  img_glob="${ROOT}/deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+  img="$(ls -1t ${img_glob} 2>/dev/null | head -n 1 || true)"
+  [[ -n "${img}" && -f "${img}" ]] || die "no OS image found for target ${OURBOX_TARGET} at ${img_glob}; build likely failed"
+
+  local base expected_pattern
+  base="$(basename "${img}")"
+  expected_pattern="img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+  [[ "${base}" != installer-* && "${base}" != *installer* ]] || die "selected image is installer artifact, refusing: ${img}"
+  [[ "${base}" == ${expected_pattern} ]] || die "selected image does not match expected OS pattern (${expected_pattern}): ${img}"
+
   echo "${img}"
 }
 
