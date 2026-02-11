@@ -77,6 +77,14 @@ systemctl status fstrim.timer --no-pager
   cmdline flags (see [`docs/OPS.md`](../OPS.md) troubleshooting)
 * No guarantee that the DATA disk is formatted automatically (we expect it to be labeled upfront)
 
+## Contract: Installer media contract
+
+Installer media embeds the target OS payload and runtime installer with these fixed paths:
+
+- Payload image: `/opt/ourbox/installer/os.img.xz`
+- Payload manifest: `/opt/ourbox/installer/manifest.env`
+- Installer entrypoint: `/opt/ourbox/tools/ourbox-install`
+
 ## Contract: Platform runtime (k3s)
 
 * `k3s` binary exists at `/usr/local/bin/k3s`
