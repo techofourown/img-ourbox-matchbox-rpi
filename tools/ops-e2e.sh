@@ -448,9 +448,18 @@ byid_for_disk() {
 }
 
 newest_img_xz() {
+  : "${OURBOX_TARGET:=rpi}"
   local img=""
-  img="$(ls -1t "${ROOT}/deploy"/img-*.img.xz 2>/dev/null | head -n 1 || true)"
-  [[ -n "${img}" && -f "${img}" ]] || die "no deploy/img-*.img.xz found; build likely failed"
+  local img_glob="${ROOT}/deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+  img="$(ls -1t ${img_glob} 2>/dev/null | head -n 1 || true)"
+  [[ -n "${img}" && -f "${img}" ]] || die "no ${img_glob} found; build likely failed"
+
+  local base expected_pattern
+  base="$(basename "${img}")"
+  expected_pattern="img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+  [[ "${base}" == installer-* || "${base}" == *installer* ]] && die "selected installer artifact instead of OS payload: ${base}"
+  [[ "${base}" == img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz ]] || die "selected artifact does not match expected OS pattern (${expected_pattern}): ${base}"
+
   echo "${img}"
 }
 

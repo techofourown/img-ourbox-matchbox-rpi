@@ -13,10 +13,11 @@ CLI="$(pick_container_cli)"
 ensure_buildkitd
 
 DEPLOY_DIR="${1:-deploy}"
+: "${OURBOX_TARGET:=rpi}"
 
-IMG_XZ="$(ls -1t "${DEPLOY_DIR}"/img-ourbox-matchbox-rpi-*.img.xz 2>/dev/null | head -n 1 || true)"
+IMG_XZ="$(ls -1t "${DEPLOY_DIR}"/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
 if [ -z "${IMG_XZ}" ] || [ ! -f "${IMG_XZ}" ]; then
-  die "No ${DEPLOY_DIR}/img-ourbox-matchbox-rpi-*.img.xz found. Did the build finish?"
+  die "No ${DEPLOY_DIR}/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz found for OURBOX_TARGET=${OURBOX_TARGET}. Did the build finish?"
 fi
 
 BASE="$(basename "${IMG_XZ}" .img.xz)"
