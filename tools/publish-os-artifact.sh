@@ -14,9 +14,12 @@ ensure_buildkitd
 
 DEPLOY_DIR="${1:-deploy}"
 
-IMG_XZ="$(ls -1t "${DEPLOY_DIR}"/img-ourbox-matchbox-rpi-*.img.xz 2>/dev/null | head -n 1 || true)"
+: "${OURBOX_TARGET:=rpi}"
+IMG_GLOB="${DEPLOY_DIR}/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+
+IMG_XZ="$(ls -1t "${DEPLOY_DIR}"/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
 if [ -z "${IMG_XZ}" ] || [ ! -f "${IMG_XZ}" ]; then
-  die "No ${DEPLOY_DIR}/img-ourbox-matchbox-rpi-*.img.xz found. Did the build finish?"
+  die "No ${IMG_GLOB} found. Did the build finish?"
 fi
 
 BASE="$(basename "${IMG_XZ}" .img.xz)"
