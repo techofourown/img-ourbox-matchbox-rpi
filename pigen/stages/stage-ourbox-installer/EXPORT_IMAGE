@@ -1,0 +1,6 @@
+# OurBox Matchbox installer final export image
+IMG_SUFFIX=""
+
+if [ "${USE_QEMU}" = "1" ]; then
+  IMG_SUFFIX="-qemu"
+fi

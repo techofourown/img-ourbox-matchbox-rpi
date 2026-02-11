@@ -1,0 +1,349 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source /opt/ourbox/tools/lib.sh
+
+MANIFEST="/opt/ourbox/installer/manifest.env"
+PAYLOAD="/opt/ourbox/installer/os.img.xz"
+DATA_CHECK_MP="/tmp/ourbox-data-check"
+SYS_BOOT_MP="/tmp/ourbox-system-boot"
+
+FINAL_STATUS="failed"
+cleanup_mounts() {
+  if mountpoint -q "${DATA_CHECK_MP}"; then
+    umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  fi
+  if mountpoint -q "${SYS_BOOT_MP}"; then
+    umount "${SYS_BOOT_MP}" >/dev/null 2>&1 || true
+  fi
+}
+
+poweroff_on_exit() {
+  local rc=$?
+  cleanup_mounts
+  if [ "${rc}" -eq 0 ]; then
+    FINAL_STATUS="success"
+  fi
+  echo
+  if [ "${FINAL_STATUS}" = "success" ]; then
+    log "Installer completed successfully. Powering off now."
+  else
+    log "Installer failed. Powering off now."
+  fi
+  sync || true
+  systemctl poweroff || /sbin/poweroff || true
+}
+trap poweroff_on_exit EXIT
+
+prompt_confirm_exact() {
+  local expected="$1"
+  local prompt="$2"
+  local ans=""
+  read -r -p "${prompt} " ans
+  [[ "${ans}" == "${expected}" ]] || die "confirmation did not match (expected: ${expected})"
+}
+
+nvme_disks() {
+  lsblk -dn -o NAME,TYPE | awk '$2=="disk" && $1 ~ /^nvme[0-9]+n[0-9]+$/ {print "/dev/"$1}'
+}
+
+parent_disk_of_part() {
+  local part="$1"
+  echo "/dev/$(lsblk -no PKNAME "${part}")"
+}
+
+show_nvme_summary() {
+  local disks=("$@")
+  lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,FSTYPE,LABEL,MOUNTPOINTS "${disks[@]}"
+}
+
+unmount_anything_on_disk() {
+  local disk="$1"
+  while read -r name mp; do
+    [[ -n "${mp}" ]] || continue
+    umount "/dev/${name}" >/dev/null 2>&1 || umount "${mp}" >/dev/null 2>&1 || true
+  done < <(lsblk -nr -o NAME,MOUNTPOINT "${disk}" | awk 'NF==2 && $2!="" {print $1, $2}')
+}
+
+inspect_data_partition() {
+  local part="$1"
+  DATA_HAS_CONTENT=0
+  DATA_BOOTSTRAP_DONE_TS=""
+
+  mkdir -p "${DATA_CHECK_MP}"
+  if mountpoint -q "${DATA_CHECK_MP}"; then
+    umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  fi
+
+  if ! mount -t ext4 -o ro,noload "${part}" "${DATA_CHECK_MP}" >/dev/null 2>&1; then
+    mount -t ext4 -o ro "${part}" "${DATA_CHECK_MP}" >/dev/null 2>&1 || return 1
+  fi
+
+  if [[ -f "${DATA_CHECK_MP}/state/bootstrap.done" ]]; then
+    DATA_BOOTSTRAP_DONE_TS="$(cat "${DATA_CHECK_MP}/state/bootstrap.done" 2>/dev/null || true)"
+  fi
+
+  local found=""
+  found="$(find "${DATA_CHECK_MP}" -mindepth 1 -maxdepth 1 ! -name lost+found -print -quit 2>/dev/null || true)"
+  if [[ -n "${found}" ]]; then
+    DATA_HAS_CONTENT=1
+  fi
+
+  umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  return 0
+}
+
+init_data_disk_ext4_labeled() {
+  local disk="$1"
+
+  log "About to DESTROY and initialize DATA disk: ${disk}"
+  unmount_anything_on_disk "${disk}"
+  show_nvme_summary "${disk}"
+  prompt_confirm_exact "ERASE-DATA" "Type ERASE-DATA to continue:"
+
+  if command -v blkdiscard >/dev/null 2>&1; then
+    blkdiscard -f "${disk}" >/dev/null 2>&1 || true
+  fi
+  wipefs -a "${disk}" >/dev/null 2>&1 || true
+
+  local zero_mib="${ZERO_MIB:-32}"
+  dd if=/dev/zero of="${disk}" bs=1M count="${zero_mib}" conv=fsync status=progress
+
+  local size_bytes total_mib seek_mib
+  size_bytes="$(blockdev --getsize64 "${disk}")"
+  total_mib="$((size_bytes / 1024 / 1024))"
+  if (( total_mib > zero_mib )); then
+    seek_mib="$((total_mib - zero_mib))"
+    dd if=/dev/zero of="${disk}" bs=1M count="${zero_mib}" seek="${seek_mib}" conv=fsync status=progress
+  fi
+  sync
+
+  parted -s "${disk}" mklabel gpt
+  parted -s "${disk}" mkpart primary ext4 1MiB 100%
+  partprobe "${disk}" || true
+
+  local part="${disk}p1"
+  mkfs.ext4 -F -L OURBOX_DATA "${part}"
+  sync
+
+  local label resolved
+  label="$(blkid -o value -s LABEL "${part}" 2>/dev/null || true)"
+  [[ "${label}" == "OURBOX_DATA" ]] || die "mkfs completed but LABEL is not OURBOX_DATA on ${part}"
+
+  resolved="$(resolve_label OURBOX_DATA)"
+  [[ -n "${resolved}" ]] || die "DATA label OURBOX_DATA not resolvable after format"
+  [[ "$(readlink -f "${resolved}")" == "$(readlink -f "${part}")" ]] || die "OURBOX_DATA resolved path mismatch"
+
+  DATA_PART="${part}"
+  DATA_DISK="${disk}"
+  log "DATA disk initialized: ${part} (LABEL=OURBOX_DATA)"
+}
+
+reset_data_bootstrap_marker() {
+  local part="$1"
+  mkdir -p "${DATA_CHECK_MP}"
+  mount -t ext4 -o rw "${part}" "${DATA_CHECK_MP}"
+  if [[ -f "${DATA_CHECK_MP}/state/bootstrap.done" ]]; then
+    rm -f "${DATA_CHECK_MP}/state/bootstrap.done"
+  fi
+  sync
+  umount "${DATA_CHECK_MP}" >/dev/null 2>&1 || true
+  log "Reset bootstrap marker on DATA: removed /state/bootstrap.done"
+}
+
+main() {
+  need_cmd xz
+  need_cmd xzcat
+  need_cmd sha256sum
+  need_cmd lsblk
+  need_cmd readlink
+  need_cmd findmnt
+  need_cmd blkid
+  need_cmd find
+  need_cmd mount
+  need_cmd umount
+  need_cmd mountpoint
+  need_cmd parted
+  need_cmd mkfs.ext4
+  need_cmd partprobe
+  need_cmd wipefs
+  need_cmd dd
+  need_cmd blockdev
+  need_cmd openssl
+  need_cmd sync
+
+  echo
+  echo "=================================================================="
+  echo "OurBox Matchbox Installer"
+  echo "=================================================================="
+  echo
+
+  [ -f "${MANIFEST}" ] || die "missing manifest: ${MANIFEST}"
+  [ -f "${PAYLOAD}" ] || die "missing payload: ${PAYLOAD}"
+
+  # shellcheck disable=SC1090
+  source "${MANIFEST}"
+  echo "Payload manifest:"
+  echo "  PAYLOAD_BASENAME=${PAYLOAD_BASENAME:-unknown}"
+  echo "  PAYLOAD_SHA256=${PAYLOAD_SHA256:-unknown}"
+  echo "  BUILD_TS=${BUILD_TS:-unknown}"
+  echo "  OURBOX_VARIANT=${OURBOX_VARIANT:-unknown}"
+  echo "  OURBOX_VERSION=${OURBOX_VERSION:-unknown}"
+  echo
+
+  log "Validating embedded payload"
+  xz -t "${PAYLOAD}"
+  [[ -n "${PAYLOAD_SHA256:-}" ]] || die "manifest missing PAYLOAD_SHA256"
+  actual_sha="$(sha256sum "${PAYLOAD}" | awk '{print $1}')"
+  [[ "${actual_sha}" == "${PAYLOAD_SHA256}" ]] || die "payload checksum mismatch"
+
+  log "Running topology safety preflight"
+  root_src="$(findmnt -nr -o SOURCE / 2>/dev/null || true)"
+  root_real="$(readlink -f "${root_src}" 2>/dev/null || echo "${root_src}")"
+  root_parent="$(lsblk -no PKNAME "${root_real}" 2>/dev/null || true)"
+  if [[ -n "${root_parent}" ]]; then
+    root_real="/dev/${root_parent}"
+  fi
+  [[ "${root_real}" != /dev/nvme* ]] || die "root filesystem is on NVMe (${root_real}); boot installer from SD/USB"
+
+  mapfile -t disks < <(nvme_disks)
+  if [[ "${#disks[@]}" -ne 2 ]]; then
+    echo
+    lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,FSTYPE,LABEL,MOUNTPOINTS || true
+    echo
+    die "installer requires exactly 2 NVMe disks; found ${#disks[@]}"
+  fi
+
+  if lsblk -nr -o MOUNTPOINT "${disks[@]}" | awk 'NF && $0 != "" {found=1} END{exit !found}'; then
+    echo
+    lsblk -o NAME,FSTYPE,LABEL,MOUNTPOINTS "${disks[@]}" || true
+    echo
+    die "refusing because one or more NVMe partitions are mounted"
+  fi
+
+  DATA_PART="$(resolve_label OURBOX_DATA)"
+  if [[ -n "${DATA_PART}" ]]; then
+    data_fstype="$(blkid -o value -s TYPE "${DATA_PART}" 2>/dev/null || true)"
+    [[ "${data_fstype}" == "ext4" ]] || die "OURBOX_DATA exists but is not ext4 (${DATA_PART})"
+    DATA_DISK="$(parent_disk_of_part "${DATA_PART}")"
+    [[ " ${disks[*]} " == *" ${DATA_DISK} "* ]] || die "OURBOX_DATA is not on one of the two NVMe disks"
+  else
+    echo
+    echo "No filesystem labeled OURBOX_DATA found."
+    show_nvme_summary "${disks[@]}"
+    echo
+    echo "Choose the DATA disk:"
+    echo "  1) ${disks[0]}"
+    echo "  2) ${disks[1]}"
+    read -r -p "Enter 1 or 2: " choice
+    [[ "${choice}" == "1" || "${choice}" == "2" ]] || die "invalid choice"
+
+    if [[ "${choice}" == "1" ]]; then
+      DATA_DISK="${disks[0]}"
+    else
+      DATA_DISK="${disks[1]}"
+    fi
+
+    init_data_disk_ext4_labeled "${DATA_DISK}"
+  fi
+
+  unmount_anything_on_disk "${DATA_DISK}"
+  if ! inspect_data_partition "${DATA_PART}"; then
+    die "Could not inspect DATA partition contents (${DATA_PART}). Refusing to proceed."
+  fi
+
+  if [[ "${DATA_HAS_CONTENT}" -eq 1 ]]; then
+    echo
+    echo "=================================================================="
+    echo "DATA disk is NOT empty"
+    echo "=================================================================="
+    echo "DATA partition: ${DATA_PART}"
+    echo "DATA disk     : ${DATA_DISK}"
+
+    if [[ -n "${DATA_BOOTSTRAP_DONE_TS}" ]]; then
+      echo "This DATA disk was previously bootstrapped."
+      echo "Keeping it will skip bootstrap and k3s will NOT auto-start."
+      echo "Recommended: RESET-BOOTSTRAP"
+    else
+      echo "This DATA disk contains files, but has no bootstrap.done marker."
+      echo "Recommended: ERASE-DATA"
+    fi
+
+    read -r -p "Type RESET-BOOTSTRAP, ERASE-DATA, or KEEP-DATA: " action
+    case "${action}" in
+      RESET-BOOTSTRAP)
+        reset_data_bootstrap_marker "${DATA_PART}"
+        ;;
+      ERASE-DATA)
+        init_data_disk_ext4_labeled "${DATA_DISK}"
+        ;;
+      KEEP-DATA)
+        log "Keeping DATA disk untouched (operator chose KEEP-DATA)."
+        log "NOTE: If bootstrap.done exists, k3s will not auto-start after flashing."
+        ;;
+      *)
+        die "invalid choice: ${action}"
+        ;;
+    esac
+  fi
+
+  if [[ "${DATA_DISK}" == "${disks[0]}" ]]; then
+    SYS_DISK="${disks[1]}"
+  else
+    SYS_DISK="${disks[0]}"
+  fi
+
+  echo
+  echo "Disk selection summary:"
+  echo "  DATA disk      : ${DATA_DISK}"
+  echo "  DATA partition : ${DATA_PART} (LABEL=OURBOX_DATA)"
+  echo "  SYSTEM disk    : ${SYS_DISK} (will be wiped)"
+  echo
+
+  prompt_confirm_exact "${SYS_DISK}" "Type the SYSTEM disk path exactly to continue:"
+  prompt_confirm_exact "FLASH" "Type FLASH to erase and flash ${SYS_DISK}:"
+
+  if command -v blkdiscard >/dev/null 2>&1; then
+    blkdiscard -f "${SYS_DISK}" >/dev/null 2>&1 || true
+  fi
+  wipefs -a "${SYS_DISK}" >/dev/null 2>&1 || true
+
+  zero_mib="${ZERO_MIB:-32}"
+  dd if=/dev/zero of="${SYS_DISK}" bs=1M count="${zero_mib}" conv=fsync status=progress
+  size_bytes="$(blockdev --getsize64 "${SYS_DISK}")"
+  total_mib="$((size_bytes / 1024 / 1024))"
+  if (( total_mib > zero_mib )); then
+    seek_mib="$((total_mib - zero_mib))"
+    dd if=/dev/zero of="${SYS_DISK}" bs=1M count="${zero_mib}" seek="${seek_mib}" conv=fsync status=progress
+  fi
+
+  log "Flashing embedded payload to ${SYS_DISK}"
+  xzcat "${PAYLOAD}" | dd of="${SYS_DISK}" bs=4M conv=fsync status=progress
+  sync
+
+  partprobe "${SYS_DISK}" || true
+  lsblk -f "${SYS_DISK}"
+
+  NEW_USER="ourbox"
+  read -r -p "Username for first boot [ourbox]: " input_user
+  if [[ -n "${input_user}" ]]; then
+    NEW_USER="${input_user}"
+  fi
+  log "Generating password hash for ${NEW_USER}"
+  HASH="$(openssl passwd -6)"
+
+  mkdir -p "${SYS_BOOT_MP}"
+  mount "${SYS_DISK}p1" "${SYS_BOOT_MP}"
+  printf '%s:%s\n' "${NEW_USER}" "${HASH}" > "${SYS_BOOT_MP}/userconf.txt"
+  sync
+  umount "${SYS_BOOT_MP}"
+  log "userconf written to ${SYS_DISK}p1"
+
+  echo
+  echo "Remove installer media"
+  echo "Boot from NVMe"
+  FINAL_STATUS="success"
+}
+
+main "$@"
