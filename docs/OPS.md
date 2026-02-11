@@ -21,6 +21,25 @@ No copy/paste IDs. No “pick your own runtime”. No “latest”.
 
 ---
 
+## Desktop → Installer Media → Pi NVMe Install
+
+Desktop command:
+
+```bash
+./tools/prepare-installer-media.sh /dev/disk/by-id/<sd-or-usb>
+```
+
+Pi boot steps:
+
+1. Insert installer SD/USB media into the Pi.
+2. Boot the Pi from that media.
+3. Follow the installer prompts on tty1 (disk safety checks + confirmations + user provisioning).
+4. Wait for automatic power-off, remove installer media, then boot from NVMe.
+
+Good looks like verification after NVMe boot remains the same as below in **First boot verification (what “good” looks like)**.
+
+---
+
 ## What you need (any Linux, including the Pi)
 
 - Booted Linux system with sudo access

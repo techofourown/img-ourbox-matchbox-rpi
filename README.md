@@ -17,10 +17,17 @@ Model identifies the physical hardware class; SKU identifies the exact bill-of-m
 - Operator runbook: [`docs/OPS.md`](./docs/OPS.md)
 - Contracts reference: [`docs/reference/contracts.md`](./docs/reference/contracts.md)
 
-## Happy path (build → publish → flash → boot)
+## Happy path (desktop → installer media → Pi NVMe install)
 
 ```bash
 git clone --recurse-submodules https://github.com/techofourown/img-ourbox-matchbox-rpi.git
 cd img-ourbox-matchbox-rpi
+./tools/prepare-installer-media.sh /dev/disk/by-id/<sd-or-usb>
+# move media to Pi, boot, follow prompts, device powers off, remove media, boot NVMe
+```
+
+Fallback (direct build+flash on the device):
+
+```bash
 ./tools/ops-e2e.sh
 ```
