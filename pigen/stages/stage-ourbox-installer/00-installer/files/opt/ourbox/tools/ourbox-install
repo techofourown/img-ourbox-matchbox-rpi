@@ -22,6 +22,7 @@ need_cmd umount
 need_cmd mountpoint
 need_cmd find
 need_cmd openssl
+need_cmd sync
 
 DATA_CHECK_MP="/run/ourbox-installer/data-check"
 SYS_BOOT_MP="/run/ourbox-installer/sys-boot"
@@ -44,6 +45,7 @@ finalize_and_poweroff() {
   fi
   echo
   log "Installer finished (${FINAL_STATUS}). Powering off now."
+  sync || true
   systemctl poweroff || /sbin/poweroff || true
 }
 trap finalize_and_poweroff EXIT

@@ -448,9 +448,17 @@ byid_for_disk() {
 }
 
 newest_img_xz() {
+  : "${OURBOX_TARGET:=rpi}"
+  local img_glob="${ROOT}/deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
   local img=""
-  img="$(ls -1t "${ROOT}/deploy"/img-*.img.xz 2>/dev/null | head -n 1 || true)"
-  [[ -n "${img}" && -f "${img}" ]] || die "no deploy/img-*.img.xz found; build likely failed"
+  img="$(ls -1t ${img_glob} 2>/dev/null | head -n 1 || true)"
+  [[ -n "${img}" && -f "${img}" ]] || die "no ${img_glob} found; build likely failed"
+
+  local base
+  base="$(basename "${img}")"
+  [[ "${base}" != installer-* && "${base}" != *installer* ]] || die "selected image is an installer artifact, not OS payload: ${img}"
+  [[ "${base}" == img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz ]] || die "selected image does not match expected OS pattern img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz: ${img}"
+
   echo "${img}"
 }
 
@@ -502,11 +510,12 @@ main() {
   log "Fetching airgap artifacts"
   "${ROOT}/tools/fetch-airgap-platform.sh"
 
+  : "${OURBOX_TARGET:=rpi}"
   : "${OURBOX_VARIANT:=dev}"
   : "${OURBOX_VERSION:=dev}"
 
   log "Building OS image (OURBOX_VARIANT=${OURBOX_VARIANT} OURBOX_VERSION=${OURBOX_VERSION})"
-  OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-image.sh"
+  OURBOX_TARGET="${OURBOX_TARGET}" OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-image.sh"
 
   local img_xz
   img_xz="$(newest_img_xz)"
@@ -517,7 +526,7 @@ main() {
 
   if [[ "${REGISTRY_ROUNDTRIP}" == "1" ]]; then
     log "Registry round-trip requested: publish + pull (no manual copy/paste)"
-    "${ROOT}/tools/publish-os-artifact.sh" "${ROOT}/deploy"
+    OURBOX_TARGET="${OURBOX_TARGET}" "${ROOT}/tools/publish-os-artifact.sh" "${ROOT}/deploy"
     rm -rf "${ROOT}/deploy-from-registry" || true
     "${ROOT}/tools/pull-os-artifact.sh" --latest "${ROOT}/deploy-from-registry"
     xz -t "${ROOT}/deploy-from-registry/os.img.xz"

@@ -8,6 +8,8 @@ source "${ROOT}/tools/lib.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
 
+: "${OURBOX_TARGET:=rpi}"
+
 cd "${ROOT}"
 mkdir -p "${ROOT}/deploy"
 if [[ ! -w "${ROOT}/deploy" ]]; then
@@ -19,17 +21,17 @@ fi
 [[ -w "${ROOT}/deploy" ]] || die "deploy/ is not writable: ${ROOT}/deploy"
 
 shopt -s nullglob
-payloads=("${ROOT}"/deploy/img-ourbox-matchbox-rpi-*.img.xz)
+payloads=("${ROOT}"/deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz)
 shopt -u nullglob
 if [[ "${#payloads[@]}" -eq 0 ]]; then
   log "No OS payload found; running ./tools/build-image.sh"
-  "${ROOT}/tools/build-image.sh"
+  OURBOX_TARGET="${OURBOX_TARGET}" "${ROOT}/tools/build-image.sh"
 fi
 
 shopt -s nullglob
-payloads=("${ROOT}"/deploy/img-ourbox-matchbox-rpi-*.img.xz)
+payloads=("${ROOT}"/deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz)
 shopt -u nullglob
-[[ "${#payloads[@]}" -gt 0 ]] || die "missing deploy/img-ourbox-matchbox-rpi-*.img.xz after build-image"
+[[ "${#payloads[@]}" -gt 0 ]] || die "missing deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz after build-image"
 
 BUILD_MARKER="${ROOT}/deploy/.build-installer-start"
 : > "${BUILD_MARKER}"
@@ -43,7 +45,6 @@ fi
 
 ensure_buildkitd
 
-: "${OURBOX_TARGET:=rpi}"
 : "${OURBOX_MODEL_ID:=TOO-OBX-MBX-01}"
 : "${OURBOX_SKU_ID:=TOO-OBX-MBX-BASE-001}"
 : "${OURBOX_VARIANT:=dev}"
@@ -79,7 +80,7 @@ move_into_deploy() {
 }
 
 shopt -s nullglob
-for f in "${ROOT}"/img-*; do
+for f in "${ROOT}"/installer-*; do
   [[ -f "${f}" ]] || continue
   [[ "${f}" -nt "${BUILD_MARKER}" ]] || continue
   case "${f}" in
@@ -103,8 +104,8 @@ if command -v sudo >/dev/null 2>&1; then
   sudo chown -R "$(id -u):$(id -g)" "${ROOT}/deploy" >/dev/null 2>&1 || true
 fi
 
-installer_img="$(ls -1t "${ROOT}"/deploy/img-ourbox-matchbox-installer-rpi-*.img.xz 2>/dev/null | head -n 1 || true)"
-[[ -n "${installer_img}" && -f "${installer_img}" ]] || die "build did not produce deploy/img-ourbox-matchbox-installer-rpi-*.img.xz"
+installer_img="$(ls -1t "${ROOT}"/deploy/installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
+[[ -n "${installer_img}" && -f "${installer_img}" ]] || die "build did not produce deploy/installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
 [[ "${installer_img}" -nt "${BUILD_MARKER}" ]] || die "installer artifact is stale (not from this run): ${installer_img}"
 
 xz -t "${installer_img}"
