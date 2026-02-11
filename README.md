@@ -22,9 +22,12 @@ Model identifies the physical hardware class; SKU identifies the exact bill-of-m
 ```bash
 git clone --recurse-submodules https://github.com/techofourown/img-ourbox-matchbox-rpi.git
 cd img-ourbox-matchbox-rpi
-./tools/prepare-installer-media.sh /dev/disk/by-id/<sd-or-usb>
+./tools/prepare-installer-media.sh
 # move media to Pi, boot, follow prompts, device powers off, remove media, boot NVMe
 ```
+
+The script now requires interactive media selection during runtime. It will list
+removable/USB disks, show mount details, and ask you to choose a target.
 
 Fallback (direct build+flash on the device):
 

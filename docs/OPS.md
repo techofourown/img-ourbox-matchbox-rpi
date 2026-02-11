@@ -26,8 +26,11 @@ No copy/paste IDs. No “pick your own runtime”. No “latest”.
 Desktop command:
 
 ```bash
-./tools/prepare-installer-media.sh /dev/disk/by-id/<sd-or-usb>
+./tools/prepare-installer-media.sh
 ```
+
+The script is interactive and will list removable/USB disks, show mount state,
+and require you to choose a target disk during the session.
 
 Pi boot steps:
 
