@@ -1,0 +1,21 @@
+[Unit]
+Description=OurBox Matchbox Installer
+After=local-fs.target
+Conflicts=getty@tty1.service
+Before=getty@tty1.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/opt/ourbox/tools/ourbox-install
+StandardInput=tty-force
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TimeoutStartSec=infinity
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

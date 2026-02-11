@@ -99,3 +99,11 @@ Long-term intent: bake this into the image during build.
 
 * ADR-0002: Storage contract (mount data by label)
 * ADR-0003: OS artifact distribution via OCI registry
+
+## Installer media contract
+
+Installer image embeds the NVMe OS payload and runtime entrypoint at fixed paths:
+
+- Payload: `/opt/ourbox/installer/os.img.xz`
+- Manifest: `/opt/ourbox/installer/manifest.env`
+- Entrypoint: `/opt/ourbox/tools/ourbox-install`
