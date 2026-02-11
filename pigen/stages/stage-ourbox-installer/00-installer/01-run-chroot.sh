@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+apt-get update
+apt-get install -y --no-install-recommends \
+  xz-utils \
+  util-linux \
+  e2fsprogs \
+  parted \
+  openssl \
+  coreutils \
+  grep \
+  sed \
+  gawk \
+  findutils
+
+chmod 0755 /opt/ourbox/tools/ourbox-install
+chmod 0644 /opt/ourbox/tools/lib.sh
+
+systemctl enable ourbox-installer.service

@@ -99,3 +99,9 @@ Long-term intent: bake this into the image during build.
 
 * ADR-0002: Storage contract (mount data by label)
 * ADR-0003: OS artifact distribution via OCI registry
+
+## Contract: Installer media contract
+
+* Embedded target OS payload lives at `/opt/ourbox/installer/os.img.xz`
+* Embedded payload manifest lives at `/opt/ourbox/installer/manifest.env`
+* Installer runtime entrypoint is `/opt/ourbox/tools/ourbox-install`
