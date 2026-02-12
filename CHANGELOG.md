@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.2.2...v0.3.0) (2026-02-12)
+
+
+### Features
+
+* **fetch:** offer interactive cleanup of existing artifacts ([b990606](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/b99060638759517ba8a26fc03b6544a332e54ee2))
+
 ## [0.2.2](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.2.1...v0.2.2) (2026-02-12)
 
 
