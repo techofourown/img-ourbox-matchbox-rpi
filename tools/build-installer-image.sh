@@ -103,7 +103,7 @@ move_into_deploy() {
 }
 
 shopt -s nullglob
-for f in "${ROOT}"/installer-*; do
+for f in "${ROOT}"/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*; do
   [[ -f "${f}" ]] || continue
   [[ "${f}" -nt "${BUILD_MARKER}" ]] || continue
   case "${f}" in
@@ -127,8 +127,18 @@ if command -v sudo >/dev/null 2>&1; then
   sudo chown -R "$(id -u):$(id -g)" "${ROOT}/deploy" >/dev/null 2>&1 || true
 fi
 
-installer_img="$(ls -1t "${ROOT}"/deploy/installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
-[[ -n "${installer_img}" && -f "${installer_img}" ]] || die "build did not produce deploy/installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+installer_img="$(ls -1t "${ROOT}"/deploy/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
+
+if [[ -z "${installer_img}" || ! -f "${installer_img}" ]]; then
+  log "ERROR: installer artifact not found where expected."
+  log "Searched: ${ROOT}/deploy/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+  log "Deploy dir contents:"
+  ls -lah "${ROOT}/deploy" || true
+  log "Repo root candidates (may exist if pi-gen wrote outside deploy/):"
+  ls -lah "${ROOT}"/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-* 2>/dev/null || true
+  die "build did not produce an installer .img.xz artifact"
+fi
+
 [[ "${installer_img}" -nt "${BUILD_MARKER}" ]] || die "installer artifact is stale (not from this run): ${installer_img}"
 
 xz -t "${installer_img}"

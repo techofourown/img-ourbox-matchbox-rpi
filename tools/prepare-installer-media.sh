@@ -196,8 +196,15 @@ OURBOX_TARGET="${OURBOX_TARGET}" OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSI
 
 OURBOX_TARGET="${OURBOX_TARGET}" OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-installer-image.sh"
 
-installer_img="$(ls -1t "${ROOT}"/deploy/installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
-[[ -n "${installer_img}" && -f "${installer_img}" ]] || die "no installer image found in deploy/"
+installer_img="$(ls -1t "${ROOT}"/deploy/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
+
+if [[ -z "${installer_img}" || ! -f "${installer_img}" ]]; then
+  log "ERROR: no installer image found in deploy/"
+  log "Searched: ${ROOT}/deploy/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+  log "Deploy dir contents:"
+  ls -lah "${ROOT}/deploy" || true
+  die "no installer image found in deploy/"
+fi
 
 "${ROOT}/tools/flash-installer-media.sh" "${installer_img}" "${TARGET_DEV}"
 
