@@ -1,3 +1,10 @@
+## [0.2.2](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.2.1...v0.2.2) (2026-02-12)
+
+
+### Bug Fixes
+
+* **fetch:** fail fast when artifacts already exist instead of failing during curl ([2d4558f](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/2d4558f53f23d16e54ae46f79d7d514dc809b23c))
+
 ## [0.2.1](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.2.0...v0.2.1) (2026-02-12)
 
 
