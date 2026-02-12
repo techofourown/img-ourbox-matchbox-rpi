@@ -1,3 +1,10 @@
+## [0.3.2](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.1...v0.3.2) (2026-02-12)
+
+
+### Bug Fixes
+
+* **installer:** ensure ROOTFS_DIR exists before copying files ([0b873a9](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/0b873a9960a1e9096ff1b5a8fd7f177895998441))
+
 ## [0.3.1](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.0...v0.3.1) (2026-02-12)
 
 
