@@ -1,3 +1,10 @@
+## [0.2.1](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.2.0...v0.2.1) (2026-02-12)
+
+
+### Bug Fixes
+
+* **build:** sanitize loop devices to prevent pi-gen export-image failures ([21ebd9d](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/21ebd9d92ddea4f341abe132ece6cb465865c193))
+
 # [0.2.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.1.5...v0.2.0) (2026-02-11)
 
 
