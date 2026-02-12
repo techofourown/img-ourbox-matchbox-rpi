@@ -55,11 +55,31 @@ if (( ${#blocking_files[@]} > 0 )); then
   done
   echo
   log "This script will NOT overwrite existing artifacts."
-  log "If you want to re-fetch, remove the artifacts directory:"
-  log "  rm -rf artifacts/airgap"
-  log "  # or if permission denied:"
-  log "  sudo rm -rf artifacts/airgap"
-  die "Refusing to fetch into non-empty artifacts directory"
+  echo
+  log "You can:"
+  log "  1. Remove them manually and re-run:"
+  log "     rm -rf artifacts/airgap"
+  log "     # or if permission denied:"
+  log "     sudo rm -rf artifacts/airgap"
+  echo
+  log "  2. Have this script remove them for you (with confirmation)"
+  echo
+
+  read -r -p "Type REMOVE to delete artifacts/airgap and continue, or anything else to abort: " confirm
+  if [[ "${confirm}" != "REMOVE" ]]; then
+    die "Fetch aborted; existing artifacts not removed"
+  fi
+
+  log "WARNING: About to remove artifacts/airgap and all contents"
+  if [[ -w "artifacts/airgap" ]]; then
+    log "Removing artifacts/airgap (no sudo needed)"
+    rm -rf "artifacts/airgap" || die "Failed to remove artifacts/airgap"
+  else
+    need_cmd sudo
+    log "Removing artifacts/airgap (requires sudo due to permissions)"
+    sudo rm -rf "artifacts/airgap" || die "Failed to remove artifacts/airgap with sudo"
+  fi
+  log "Artifacts removed; proceeding with fetch"
 fi
 
 OUT="artifacts/airgap"
