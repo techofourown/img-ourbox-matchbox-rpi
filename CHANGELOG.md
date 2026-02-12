@@ -1,3 +1,10 @@
+## [0.3.4](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.3...v0.3.4) (2026-02-12)
+
+
+### Bug Fixes
+
+* **installer:** make artifact naming deterministic and glob patterns robust ([a6a919b](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/a6a919b6d7e9ca46547769c2693489249b0aabd3))
+
 ## [0.3.3](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.2...v0.3.3) (2026-02-12)
 
 
