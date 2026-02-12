@@ -5,6 +5,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Ensure ROOTFS_DIR exists (pi-gen doesn't always create it for custom stages)
+mkdir -p "${ROOTFS_DIR}"
+
 cp -a "${SCRIPT_DIR}/files/." "${ROOTFS_DIR}/"
 
 install -d -m 0755 "${ROOTFS_DIR}/opt/ourbox/installer"
