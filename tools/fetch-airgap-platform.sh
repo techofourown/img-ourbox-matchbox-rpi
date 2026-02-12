@@ -13,6 +13,9 @@ need_cmd curl
 need_cmd chmod
 need_cmd sed
 
+# Always operate from repo root so relative paths (artifacts/) are stable
+cd "${ROOT}"
+
 : "${K3S_VERSION:=}"
 : "${NGINX_IMAGE:=docker.io/library/nginx:1.27-alpine}"
 
@@ -35,11 +38,32 @@ NGINX_IMAGE="$(canonicalize_image_ref "${NGINX_IMAGE}")"
 log "Using K3S_VERSION=${K3S_VERSION}"
 log "Using NGINX_IMAGE=${NGINX_IMAGE}"
 
+# Preflight: check for existing artifacts that would block fetch
+log "Preflight: checking for existing artifacts (fetch script will not overwrite)"
+NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+
+blocking_files=()
+[[ -f "artifacts/airgap/k3s/k3s" ]] && blocking_files+=("artifacts/airgap/k3s/k3s")
+[[ -f "artifacts/airgap/k3s/k3s-airgap-images-arm64.tar" ]] && blocking_files+=("artifacts/airgap/k3s/k3s-airgap-images-arm64.tar")
+[[ -f "artifacts/airgap/platform/images/${NGINX_TAR}" ]] && blocking_files+=("artifacts/airgap/platform/images/${NGINX_TAR}")
+
+if (( ${#blocking_files[@]} > 0 )); then
+  log "ERROR: Existing artifacts detected (refusing to overwrite):"
+  for f in "${blocking_files[@]}"; do
+    echo "  ${f}"
+    ls -lh "${f}" 2>/dev/null | sed 's/^/    /' || true
+  done
+  echo
+  log "This script will NOT overwrite existing artifacts."
+  log "If you want to re-fetch, remove the artifacts directory:"
+  log "  rm -rf artifacts/airgap"
+  log "  # or if permission denied:"
+  log "  sudo rm -rf artifacts/airgap"
+  die "Refusing to fetch into non-empty artifacts directory"
+fi
+
 OUT="artifacts/airgap"
 mkdir -p "$OUT/k3s" "$OUT/platform/images"
-
-# Consistent tar name derived from image ref
-NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
 
 log "Fetch k3s binary (arm64) @ ${K3S_VERSION}"
 curl -fsSL \
