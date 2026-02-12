@@ -1,5 +1,5 @@
 [submodule "vendor/pi-gen"]
 	path = vendor/pi-gen
-	url = https://github.com/techofourown/pi-gen.git
+	url = https://github.com/RPi-Distro/pi-gen.git
 	ignore = untracked
 	branch = arm64

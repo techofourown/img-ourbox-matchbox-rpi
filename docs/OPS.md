@@ -21,14 +21,6 @@ No copy/paste IDs. No “pick your own runtime”. No “latest”.
 
 ---
 
-## Pinned dependencies
-
-- `vendor/pi-gen` is pinned to the OurBox fork: `https://github.com/techofourown/pi-gen.git`.
-- Pinned commit: `bfb82354ad1b9cdf2d57a604b3371d41910fd3eb`.
-- Why pinned: includes OurBox loop-device robustness fix for pi-gen `export-image` in containers where `losetup -f` can return annotated values such as `/dev/loopN (lost)`.
-
----
-
 ## Build preflight
 
 All build entry points now run `tools/preflight-build-host.sh` automatically before invoking pi-gen (`tools/build-image.sh`, `tools/build-installer-image.sh`, and `tools/ops-e2e.sh`).
