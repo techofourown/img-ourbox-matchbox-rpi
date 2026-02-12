@@ -1,3 +1,10 @@
+## [0.3.1](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.0...v0.3.1) (2026-02-12)
+
+
+### Bug Fixes
+
+* **submodule:** revert to upstream RPi-Distro/pi-gen ([dd05c88](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/dd05c886094f38172edd2de527ab1311d58b1192))
+
 # [0.3.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.2.2...v0.3.0) (2026-02-12)
 
 
