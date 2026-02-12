@@ -6,6 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/lib.sh"
 
+cleanup_loopdevs_on_exit() {
+  local rc=$?
+  trap - EXIT
+  "${ROOT}/tools/sanitize-loopdevs.sh" || true
+  exit "${rc}"
+}
+trap cleanup_loopdevs_on_exit EXIT
+
 # Always operate from repo root so any relative paths (including vendor/pi-gen) are stable.
 cd "${ROOT}"
 
@@ -22,6 +30,11 @@ fi
 
 [[ -w "${ROOT}/deploy" ]] || die "deploy/ is not writable: ${ROOT}/deploy (fix ownership/permissions and rerun)"
 log "Ensured deploy dir exists: ${ROOT}/deploy"
+
+LOCK_FILE="${ROOT}/deploy/ourbox-build.lock"
+exec 9>"${LOCK_FILE}"
+flock -n 9 || die "another build is already running (lock: ${LOCK_FILE})"
+
 # Marker to detect build outputs from this run (prevents stale artifacts).
 BUILD_MARKER="${ROOT}/deploy/.build-start"
 : > "${BUILD_MARKER}"
@@ -44,6 +57,9 @@ fi
 
 # If we're using nerdctl, we need buildkitd running.
 ensure_buildkitd
+
+log "Preflight: validating loop-device health before build"
+"${ROOT}/tools/preflight-build-host.sh"
 
 # Ensure build dependencies are pulled from OUR registry and tagged to the names vendor expects.
 "${ROOT}/tools/pull-required-images.sh"
@@ -77,6 +93,14 @@ log "Preflight: verifying airgap artifacts exist"
 [[ -x "${ROOT}/artifacts/airgap/k3s/k3s" ]] || die "missing k3s binary; run ./tools/fetch-airgap-platform.sh"
 [[ -f "${ROOT}/artifacts/airgap/k3s/k3s-airgap-images-arm64.tar" ]] || die "missing k3s airgap tar; run ./tools/fetch-airgap-platform.sh"
 [[ -f "${ROOT}/artifacts/airgap/platform/images/${NGINX_TAR}" ]] || die "missing nginx tar; run ./tools/fetch-airgap-platform.sh"
+
+if $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'pigen_work'; then
+  log "Removing stale pi-gen container: pigen_work"
+  $DOCKER rm -f -v pigen_work >/dev/null 2>&1 || true
+fi
+
+log "Preflight: sanitizing host loop devices to protect pi-gen export-image"
+"${ROOT}/tools/sanitize-loopdevs.sh"
 
 if [[ "$(cli_base "${DOCKER}")" == "podman" && "${DOCKER}" == *" "* && -n "${SUDO}" ]]; then
   log "NOTE: running pi-gen under sudo with DOCKER=podman (avoids sudo-in-DOCKER quoting issues)"

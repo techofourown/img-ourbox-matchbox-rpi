@@ -8,6 +8,14 @@ source "${ROOT}/tools/lib.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
 
+cleanup_loopdevs_on_exit() {
+  local rc=$?
+  trap - EXIT
+  "${ROOT}/tools/sanitize-loopdevs.sh" || true
+  exit "${rc}"
+}
+trap cleanup_loopdevs_on_exit EXIT
+
 : "${OURBOX_TARGET:=rpi}"
 
 cd "${ROOT}"
@@ -19,6 +27,9 @@ if [[ ! -w "${ROOT}/deploy" ]]; then
   fi
 fi
 [[ -w "${ROOT}/deploy" ]] || die "deploy/ is not writable: ${ROOT}/deploy"
+
+log "Preflight: validating loop-device health before build"
+"${ROOT}/tools/preflight-build-host.sh"
 
 shopt -s nullglob
 payloads=("${ROOT}"/deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz)
@@ -32,6 +43,10 @@ shopt -s nullglob
 payloads=("${ROOT}"/deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz)
 shopt -u nullglob
 [[ "${#payloads[@]}" -gt 0 ]] || die "missing deploy/img-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz after build-image"
+
+LOCK_FILE="${ROOT}/deploy/ourbox-build.lock"
+exec 9>"${LOCK_FILE}"
+flock -n 9 || die "another build is already running (lock: ${LOCK_FILE})"
 
 BUILD_MARKER="${ROOT}/deploy/.build-installer-start"
 : > "${BUILD_MARKER}"
@@ -58,6 +73,14 @@ export PIGEN_DOCKER_OPTS="${PIGEN_DOCKER_OPTS:-} \
   -e OURBOX_MODEL_ID=${OURBOX_MODEL_ID} \
   -e OURBOX_SKU_ID=${OURBOX_SKU_ID} \
   -e OURBOX_TARGET=${OURBOX_TARGET}"
+
+if $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'pigen_work'; then
+  log "Removing stale pi-gen container: pigen_work"
+  $DOCKER rm -f -v pigen_work >/dev/null 2>&1 || true
+fi
+
+log "Preflight: sanitizing host loop devices to protect pi-gen export-image"
+"${ROOT}/tools/sanitize-loopdevs.sh"
 
 if [[ "$(cli_base "${DOCKER}")" == "podman" && "${DOCKER}" == *" "* && -n "${SUDO}" ]]; then
   DOCKER=podman ${SUDO} "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox-installer.conf"

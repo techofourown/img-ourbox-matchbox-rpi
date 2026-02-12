@@ -21,6 +21,26 @@ No copy/paste IDs. No “pick your own runtime”. No “latest”.
 
 ---
 
+## Pinned dependencies
+
+- `vendor/pi-gen` is pinned to the OurBox fork: `https://github.com/techofourown/pi-gen.git`.
+- Pinned commit: `bfb82354ad1b9cdf2d57a604b3371d41910fd3eb`.
+- Why pinned: includes OurBox loop-device robustness fix for pi-gen `export-image` in containers where `losetup -f` can return annotated values such as `/dev/loopN (lost)`.
+
+---
+
+## Build preflight
+
+All build entry points now run `tools/preflight-build-host.sh` automatically before invoking pi-gen (`tools/build-image.sh`, `tools/build-installer-image.sh`, and `tools/ops-e2e.sh`).
+
+Build scripts automatically sanitize stale `(lost|deleted)` loop devices before and after pi-gen runs to prevent export-image failures.
+
+If preflight fails, required action is: **reboot the build host**.
+
+Why this exists: pi-gen `export-image` loop creation can fail in containers when loop state is unhealthy (`(lost)`/`(deleted)` loops and missing loop nodes in container `/dev`). Preflight forces this to fail-fast in seconds instead of after hours of build time.
+
+---
+
 ## Desktop → Installer Media → Pi NVMe Install
 
 Desktop command:

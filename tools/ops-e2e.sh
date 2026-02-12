@@ -497,14 +497,6 @@ main() {
   export DOCKER="${DOCKER:-$(pick_container_cli)}"
   log "Using container CLI: ${DOCKER}"
 
-  # Common after a failed pi-gen run: container name collision.
-  # Offer to clean it up so reruns are reliable.
-  if $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'pigen_work'; then
-    log "Found existing container: pigen_work (likely from a previous failed build)"
-    prompt_confirm_exact "CLEAN" "Type CLEAN to remove pigen_work and continue:"
-    $DOCKER rm -f -v pigen_work >/dev/null 2>&1 || true
-  fi
-
   # Enforce pinned versions
   [[ -n "${K3S_VERSION:-}" ]] || die "K3S_VERSION not set; check tools/versions.env"
   [[ -n "${NGINX_IMAGE:-}" ]] || die "NGINX_IMAGE not set; check tools/versions.env"
@@ -512,6 +504,9 @@ main() {
 
   log "Fetching airgap artifacts"
   "${ROOT}/tools/fetch-airgap-platform.sh"
+
+  log "Running build-host loop preflight"
+  "${ROOT}/tools/preflight-build-host.sh"
 
   : "${OURBOX_TARGET:=rpi}"
   : "${OURBOX_VARIANT:=dev}"
