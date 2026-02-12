@@ -1,3 +1,10 @@
+## [0.3.3](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.2...v0.3.3) (2026-02-12)
+
+
+### Bug Fixes
+
+* **installer:** seed rootfs from previous stage via copy_previous ([2b05889](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/2b05889249fe368358c8d60e09fe4c74cc1207af))
+
 ## [0.3.2](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.1...v0.3.2) (2026-02-12)
 
 
