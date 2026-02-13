@@ -1,3 +1,10 @@
+## [0.3.5](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.4...v0.3.5) (2026-02-13)
+
+
+### Bug Fixes
+
+* **installer:** skip first-boot wizard and improve boot reliability ([4cfeda2](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/4cfeda268b117f004ed02f4edbe8e2f79491dca4))
+
 ## [0.3.4](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.3...v0.3.4) (2026-02-12)
 
 
