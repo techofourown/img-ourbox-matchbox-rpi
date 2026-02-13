@@ -21,7 +21,10 @@ mkdir -p \
   "$STATE_DIR" \
   "/var/lib/ourbox/device" \
   "/var/lib/ourbox/secrets" \
-  "/var/lib/ourbox/k3s/agent/images"
+  "/var/lib/ourbox/k3s/agent/images" \
+  "/var/lib/ourbox/share" \
+  "/var/lib/ourbox/flatnotes" \
+  "/var/lib/ourbox/todo-bloom"
 
 # device_id (stable)
 if [[ ! -f /var/lib/ourbox/device/device_id ]]; then
@@ -45,6 +48,9 @@ write-kubeconfig-mode: "0644"
 disable:
   - servicelb
 EOF_CONFIG
+
+log "Copying Todo Bloom static files to DATA disk"
+cp -f /opt/ourbox/airgap/platform/todo-bloom/* /var/lib/ourbox/todo-bloom/
 
 log "Hydrating airgap image tars into /var/lib/ourbox/k3s/agent/images"
 # Hydrate images: copy ALL tars into k3s agent/images BEFORE starting.
