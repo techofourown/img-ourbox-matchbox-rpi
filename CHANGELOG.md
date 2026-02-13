@@ -1,3 +1,10 @@
+## [0.5.2](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.5.1...v0.5.2) (2026-02-13)
+
+
+### Bug Fixes
+
+* **bootstrap:** make k3s startup and bootstrap resilient to missing default route ([7b8d395](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/7b8d395f387b2e674da641a4ea633762bebe7f40))
+
 ## [0.5.1](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.5.0...v0.5.1) (2026-02-13)
 
 
