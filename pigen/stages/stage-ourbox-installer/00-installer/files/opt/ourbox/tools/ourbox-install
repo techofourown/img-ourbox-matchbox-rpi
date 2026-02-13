@@ -228,11 +228,11 @@ main() {
   fi
   [[ "${root_real}" != /dev/nvme* ]] || die "root filesystem is on NVMe (${root_real}); boot installer from SD/USB"
 
-  log "Waiting for NVMe disks to enumerate"
+  log "Waiting for exactly 2 NVMe disks to enumerate"
   local disks=()
-  for _i in $(seq 1 20); do
+  for _i in $(seq 1 40); do
     mapfile -t disks < <(nvme_disks)
-    [[ "${#disks[@]}" -gt 0 ]] && break
+    [[ "${#disks[@]}" -eq 2 ]] && break
     sleep 0.5
   done
 
