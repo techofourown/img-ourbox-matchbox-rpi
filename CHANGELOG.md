@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.6...v0.4.0) (2026-02-13)
+
+
+### Features
+
+* **platform:** add dufs, flatnotes, and todo-bloom to airgap bundle ([55fa492](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/55fa49225fcbf711854c807e176f852ea2745c46))
+
 ## [0.3.6](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.5...v0.3.6) (2026-02-13)
 
 
