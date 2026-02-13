@@ -24,7 +24,8 @@ mkdir -p \
   "/var/lib/ourbox/k3s/agent/images" \
   "/var/lib/ourbox/share" \
   "/var/lib/ourbox/flatnotes" \
-  "/var/lib/ourbox/todo-bloom"
+  "/var/lib/ourbox/todo-bloom" \
+  "/var/lib/ourbox/landing"
 
 # device_id (stable)
 if [[ ! -f /var/lib/ourbox/device/device_id ]]; then
@@ -45,12 +46,11 @@ cat > /etc/rancher/k3s/config.yaml <<EOF_CONFIG
 token: "${TOKEN}"
 data-dir: /var/lib/ourbox/k3s
 write-kubeconfig-mode: "0644"
-disable:
-  - servicelb
 EOF_CONFIG
 
-log "Copying Todo Bloom static files to DATA disk"
+log "Copying static files to DATA disk"
 cp -f /opt/ourbox/airgap/platform/todo-bloom/* /var/lib/ourbox/todo-bloom/
+cp -f /opt/ourbox/airgap/platform/landing/* /var/lib/ourbox/landing/
 
 log "Hydrating airgap image tars into /var/lib/ourbox/k3s/agent/images"
 # Hydrate images: copy ALL tars into k3s agent/images BEFORE starting.

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOSTNAME="$(hostname)"
+ALIASES=(
+  "files.${HOSTNAME}.local"
+  "notes.${HOSTNAME}.local"
+  "todo.${HOSTNAME}.local"
+)
+
+# Wait for a routable IP (up to 30s)
+IP=""
+for _i in $(seq 1 30); do
+  IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  [[ -n "${IP}" ]] && break
+  sleep 1
+done
+
+if [[ -z "${IP}" ]]; then
+  echo "ERROR: no IP address after 30s; cannot publish mDNS aliases" >&2
+  exit 1
+fi
+
+echo "Publishing mDNS aliases for ${IP}:"
+PIDS=()
+for alias in "${ALIASES[@]}"; do
+  echo "  ${alias}"
+  avahi-publish-address -R "${alias}" "${IP}" &
+  PIDS+=($!)
+done
+
+wait "${PIDS[@]}"

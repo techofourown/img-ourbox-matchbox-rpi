@@ -1,35 +1,43 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hello
+  name: landing
   namespace: ourbox-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: hello
+      app: landing
   template:
     metadata:
       labels:
-        app: hello
+        app: landing
     spec:
       containers:
-        - name: web
+        - name: nginx
           image: nginx:1.27-alpine
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - containerPort: 80
+          volumeMounts:
+            - name: static
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+      volumes:
+        - name: static
+          hostPath:
+            path: /var/lib/ourbox/landing
+            type: Directory
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: hello
+  name: landing
   namespace: ourbox-system
 spec:
   selector:
-    app: hello
-  type: NodePort
+    app: landing
+  type: ClusterIP
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30080

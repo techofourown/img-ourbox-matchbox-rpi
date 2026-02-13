@@ -37,9 +37,8 @@ metadata:
 spec:
   selector:
     app: dufs
-  type: NodePort
+  type: ClusterIP
   ports:
     - name: http
       port: 5000
       targetPort: 5000
-      nodePort: 30081

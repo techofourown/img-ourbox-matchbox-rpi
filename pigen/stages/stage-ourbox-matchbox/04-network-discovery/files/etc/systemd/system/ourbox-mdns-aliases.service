@@ -1,0 +1,13 @@
+[Unit]
+Description=Publish OurBox mDNS subdomain aliases
+After=avahi-daemon.service network-online.target
+Wants=avahi-daemon.service network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/ourbox-mdns-aliases
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
