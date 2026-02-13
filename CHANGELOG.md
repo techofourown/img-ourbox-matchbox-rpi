@@ -1,3 +1,10 @@
+## [0.5.1](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.5.0...v0.5.1) (2026-02-13)
+
+
+### Bug Fixes
+
+* **build:** make network-discovery stage scripts executable ([6118461](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/611846172c940086d132caf59e9b35b08f223145))
+
 # [0.5.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.4.0...v0.5.0) (2026-02-13)
 
 
