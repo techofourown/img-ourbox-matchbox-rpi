@@ -2,7 +2,8 @@
 Description=OurBox Matchbox installer
 Conflicts=getty@tty1.service
 Before=getty@tty1.service
-After=local-fs.target
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
 
 [Service]
 Type=simple

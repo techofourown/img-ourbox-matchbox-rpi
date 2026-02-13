@@ -26,7 +26,6 @@ need_cmd sync
 
 DATA_CHECK_MP="/run/ourbox-installer/data-check"
 SYS_BOOT_MP="/run/ourbox-installer/sys-boot"
-FINAL_STATUS="failed"
 
 cleanup_mounts() {
   if mountpoint -q "${DATA_CHECK_MP}"; then
@@ -37,18 +36,26 @@ cleanup_mounts() {
   fi
 }
 
-finalize_and_poweroff() {
+finalize() {
   local rc=$?
+  trap - EXIT
   cleanup_mounts
-  if [[ "${rc}" -eq 0 ]]; then
-    FINAL_STATUS="success"
-  fi
+
   echo
-  log "Installer finished (${FINAL_STATUS}). Powering off now."
-  sync || true
-  systemctl poweroff || /sbin/poweroff || true
+  if [[ "${rc}" -eq 0 ]]; then
+    log "Installer finished (success). Powering off now."
+    sync || true
+    systemctl poweroff || /sbin/poweroff || true
+    exit 0
+  fi
+
+  log "ERROR: Installer failed (rc=${rc})."
+  log "Dropping to an interactive shell for debugging."
+  log "When you're done, type: poweroff"
+
+  exec /bin/bash -l
 }
-trap finalize_and_poweroff EXIT
+trap finalize EXIT
 
 prompt_confirm_exact() {
   local expected="$1"
@@ -221,7 +228,14 @@ main() {
   fi
   [[ "${root_real}" != /dev/nvme* ]] || die "root filesystem is on NVMe (${root_real}); boot installer from SD/USB"
 
-  mapfile -t disks < <(nvme_disks)
+  log "Waiting for NVMe disks to enumerate"
+  local disks=()
+  for _i in $(seq 1 20); do
+    mapfile -t disks < <(nvme_disks)
+    [[ "${#disks[@]}" -gt 0 ]] && break
+    sleep 0.5
+  done
+
   if [[ "${#disks[@]}" -ne 2 ]]; then
     lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,FSTYPE,LABEL,MOUNTPOINTS || true
     die "expected exactly 2 NVMe disks, found ${#disks[@]}"

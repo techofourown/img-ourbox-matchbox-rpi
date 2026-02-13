@@ -68,6 +68,7 @@ ensure_buildkitd
 export PIGEN_DOCKER_OPTS="${PIGEN_DOCKER_OPTS:-} \
   --volume ${ROOT}:/ourbox:ro \
   --volume ${ROOT}/pigen/overrides/stage2/SKIP_IMAGES:/pi-gen/stage2/SKIP_IMAGES:ro \
+  --volume ${ROOT}/pigen/overrides/export-image/01-user-rename/SKIP:/pi-gen/export-image/01-user-rename/SKIP:ro \
   -e OURBOX_VARIANT=${OURBOX_VARIANT} \
   -e OURBOX_VERSION=${OURBOX_VERSION} \
   -e OURBOX_MODEL_ID=${OURBOX_MODEL_ID} \
