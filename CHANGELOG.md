@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.4.0...v0.5.0) (2026-02-13)
+
+
+### Features
+
+* **network:** add mDNS subdomain routing via avahi + Traefik ingress ([950c925](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/950c9257e17bce8610fef00dbd27f0688c4a0a7f))
+
 # [0.4.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.6...v0.4.0) (2026-02-13)
 
 
