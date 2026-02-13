@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log(){ echo "[ourbox-k3s-prep] $*"; }
+
+DATA_MOUNT="/var/lib/ourbox"
+TOKEN_FILE="${DATA_MOUNT}/secrets/k3s_token"
+CFG_DIR="/etc/rancher/k3s"
+CFG="${CFG_DIR}/config.yaml"
+
+# Hard requirement: we don't run k3s on the OS disk
+if ! mountpoint -q "${DATA_MOUNT}"; then
+  log "ERROR: ${DATA_MOUNT} is not mounted; refusing to start k3s."
+  exit 1
+fi
+
+mkdir -p "$(dirname "${TOKEN_FILE}")" "${CFG_DIR}"
+
+# Stable token stored on DATA disk
+if [[ ! -f "${TOKEN_FILE}" ]]; then
+  log "Generating k3s token: ${TOKEN_FILE}"
+  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "${TOKEN_FILE}"
+  chmod 0600 "${TOKEN_FILE}"
+fi
+
+pick_iface_ip() {
+  local iface ipcidr ip
+
+  # 1) Prefer interface with a default route (when it exists)
+  iface="$(ip -4 route show default 2>/dev/null \
+    | awk 'NR==1{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')"
+
+  if [[ -n "${iface}" ]]; then
+    ipcidr="$(ip -4 -o addr show dev "${iface}" scope global 2>/dev/null | awk 'NR==1{print $4}')"
+    ip="${ipcidr%%/*}"
+    if [[ -n "${ip}" ]]; then
+      echo "${iface} ${ip}"
+      return 0
+    fi
+  fi
+
+  # 2) Otherwise pick first sane non-virtual iface with a global IPv4
+  while read -r iface ipcidr; do
+    [[ -n "${iface}" ]] || continue
+    case "${iface}" in
+      lo|docker*|podman*|br-*|veth*|cni*|flannel*|kube*|virbr*|zt*|tailscale*) continue ;;
+    esac
+    ip="${ipcidr%%/*}"
+    [[ -n "${ip}" ]] || continue
+    echo "${iface} ${ip}"
+    return 0
+  done < <(ip -4 -o addr show scope global 2>/dev/null | awk '{print $2, $4}')
+
+  return 1
+}
+
+iface=""
+ip=""
+
+# Wait up to 120s for a usable IPv4 (but don't require a default route)
+for i in $(seq 1 120); do
+  if read -r iface ip < <(pick_iface_ip); then
+    [[ -n "${iface}" && -n "${ip}" ]] && break
+  fi
+  if (( i % 10 == 0 )); then
+    log "Waiting for a usable IPv4... (${i}/120)"
+  fi
+  sleep 1
+done
+
+if [[ -z "${ip}" ]]; then
+  log "ERROR: No usable IPv4 address found after 120s."
+  ip -4 addr show || true
+  ip -4 route show || true
+  exit 1
+fi
+
+cat > "${CFG}" <<EOF
+token-file: "${TOKEN_FILE}"
+data-dir: /var/lib/ourbox/k3s
+write-kubeconfig-mode: "0644"
+node-ip: "${ip}"
+flannel-iface: "${iface}"
+EOF
+
+log "Wrote ${CFG} (node-ip=${ip} flannel-iface=${iface})"

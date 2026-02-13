@@ -23,8 +23,9 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: HostRegexp(`^files\.`)
+    - match: HostRegexp(`files.{domain:.+}`)
       kind: Rule
+      priority: 100
       services:
         - name: dufs
           port: 5000
@@ -38,8 +39,9 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: HostRegexp(`^notes\.`)
+    - match: HostRegexp(`notes.{domain:.+}`)
       kind: Rule
+      priority: 100
       services:
         - name: flatnotes
           port: 8080
@@ -53,8 +55,9 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: HostRegexp(`^todo\.`)
+    - match: HostRegexp(`todo.{domain:.+}`)
       kind: Rule
+      priority: 100
       services:
         - name: todo-bloom
           port: 80

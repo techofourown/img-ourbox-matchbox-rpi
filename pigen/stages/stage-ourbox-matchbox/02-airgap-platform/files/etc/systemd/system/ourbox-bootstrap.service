@@ -4,11 +4,15 @@ After=local-fs.target network-online.target
 Wants=network-online.target
 RequiresMountsFor=/var/lib/ourbox
 ConditionPathExists=!/var/lib/ourbox/state/bootstrap.done
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/ourbox-bootstrap
 RemainAfterExit=yes
+TimeoutStartSec=infinity
+Restart=on-failure
+RestartSec=30s
 
 [Install]
 WantedBy=multi-user.target

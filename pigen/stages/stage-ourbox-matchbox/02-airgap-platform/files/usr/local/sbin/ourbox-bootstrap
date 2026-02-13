@@ -5,13 +5,14 @@ log(){ echo "[$(date -Is)] $*"; }
 
 STATE_DIR="/var/lib/ourbox/state"
 MARKER="${STATE_DIR}/bootstrap.done"
+KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
 
 # idempotent
 if [[ -f "$MARKER" ]]; then
   exit 0
 fi
 
-# hard requirement for product posture: don’t bootstrap platform onto OS disk
+# hard requirement for product posture: don't bootstrap platform onto OS disk
 if ! mountpoint -q /var/lib/ourbox; then
   echo "ERROR: /var/lib/ourbox is not mounted. Refusing to bootstrap." >&2
   exit 1
@@ -33,30 +34,20 @@ if [[ ! -f /var/lib/ourbox/device/device_id ]]; then
 fi
 DEVICE_ID="$(cat /var/lib/ourbox/device/device_id)"
 
-# k3s token (stable)
-if [[ ! -f /var/lib/ourbox/secrets/k3s_token ]]; then
-  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /var/lib/ourbox/secrets/k3s_token
-  chmod 0600 /var/lib/ourbox/secrets/k3s_token
-fi
-TOKEN="$(cat /var/lib/ourbox/secrets/k3s_token)"
-
-# Write k3s config (data-dir on DATA disk)
-mkdir -p /etc/rancher/k3s
-cat > /etc/rancher/k3s/config.yaml <<EOF_CONFIG
-token: "${TOKEN}"
-data-dir: /var/lib/ourbox/k3s
-write-kubeconfig-mode: "0644"
-EOF_CONFIG
-
 log "Copying static files to DATA disk"
 cp -f /opt/ourbox/airgap/platform/todo-bloom/* /var/lib/ourbox/todo-bloom/
 cp -f /opt/ourbox/airgap/platform/landing/* /var/lib/ourbox/landing/
 
-log "Hydrating airgap image tars into /var/lib/ourbox/k3s/agent/images"
-# Hydrate images: copy ALL tars into k3s agent/images BEFORE starting.
+log "Hydrating airgap image tars into /var/lib/ourbox/k3s/agent/images (copy-if-missing)"
 shopt -s nullglob
-cp -f /opt/ourbox/airgap/k3s/*.tar /var/lib/ourbox/k3s/agent/images/
-cp -f /opt/ourbox/airgap/platform/images/*.tar /var/lib/ourbox/k3s/agent/images/
+for tar in /opt/ourbox/airgap/k3s/*.tar /opt/ourbox/airgap/platform/images/*.tar; do
+  base="$(basename "${tar}")"
+  dst="/var/lib/ourbox/k3s/agent/images/${base}"
+  if [[ -f "${dst}" ]]; then
+    continue
+  fi
+  cp -f "${tar}" "${dst}"
+done
 shopt -u nullglob
 
 log "Hydrated tar files:"
@@ -75,22 +66,59 @@ fi
 systemctl enable k3s.service
 systemctl start k3s.service
 
-# Wait for API
-log "Waiting for k3s API..."
-for i in $(seq 1 180); do
-  if /usr/local/bin/k3s kubectl get nodes >/dev/null 2>&1; then
-    log "k3s API is up"
-    break
+# Wait for kubeconfig + API (never fall back to localhost:8080)
+log "Waiting for k3s kubeconfig + API..."
+for i in $(seq 1 600); do
+  if [[ -f "${KUBECONFIG_PATH}" ]]; then
+    if /usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" get nodes >/dev/null 2>&1; then
+      log "k3s API is up"
+      break
+    fi
   fi
-  if (( i % 5 == 0 )); then
-    log "still waiting... (${i}/180)"
+
+  # If k3s is hard-failed, exit early with useful logs
+  if systemctl is-failed --quiet k3s.service; then
+    echo "ERROR: k3s.service is failed. Recent logs:" >&2
+    journalctl -u k3s --no-pager -n 120 >&2 || true
+    exit 1
+  fi
+
+  if (( i % 10 == 0 )); then
+    log "still waiting... (${i}/600)"
   fi
   sleep 1
 done
-/usr/local/bin/k3s kubectl get nodes >/dev/null
 
-# Apply platform demo manifests (offline)
-/usr/local/bin/k3s kubectl apply -f /opt/ourbox/airgap/platform/manifests
+# Final gate
+if ! /usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" get nodes >/dev/null 2>&1; then
+  echo "ERROR: k3s API never became ready. Recent logs:" >&2
+  journalctl -u k3s --no-pager -n 200 >&2 || true
+  exit 1
+fi
+
+# Apply platform manifests (excluding ingress — Traefik CRDs may not exist yet)
+log "Applying platform manifests (excluding ingress)"
+for f in /opt/ourbox/airgap/platform/manifests/*.yaml; do
+  [[ "$(basename "$f")" == "50-ingress.yaml" ]] && continue
+  /usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" apply -f "$f"
+done
+
+# Wait for Traefik IngressRoute CRD before applying ingress routes
+log "Waiting for Traefik IngressRoute CRD..."
+for i in $(seq 1 120); do
+  if /usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" \
+      get crd ingressroutes.traefik.io >/dev/null 2>&1; then
+    break
+  fi
+  if (( i % 10 == 0 )); then
+    log "still waiting for CRD... (${i}/120)"
+  fi
+  sleep 1
+done
+
+log "Applying ingress routes"
+/usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" \
+  apply -f /opt/ourbox/airgap/platform/manifests/50-ingress.yaml
 
 date -Is > "$MARKER"
 echo "OurBox bootstrap complete. device_id=${DEVICE_ID}"

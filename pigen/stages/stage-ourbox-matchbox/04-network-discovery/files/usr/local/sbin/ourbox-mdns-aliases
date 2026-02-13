@@ -8,10 +8,11 @@ ALIASES=(
   "todo.${HOSTNAME}.local"
 )
 
-# Wait for a routable IP (up to 30s)
+# Wait for a global IPv4 (up to 30s)
 IP=""
 for _i in $(seq 1 30); do
-  IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  IP="$(ip -o -4 addr show scope global up 2>/dev/null \
+    | awk '{split($4,a,"/"); print a[1]}' | head -n1)"
   [[ -n "${IP}" ]] && break
   sleep 1
 done

@@ -1,13 +1,16 @@
 [Unit]
 Description=k3s (OurBox single-node)
-After=network-online.target
+After=local-fs.target network-online.target
 Wants=network-online.target
+RequiresMountsFor=/var/lib/ourbox
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
+ExecStartPre=/usr/local/sbin/ourbox-k3s-prep
 ExecStart=/usr/local/bin/k3s server --config /etc/rancher/k3s/config.yaml
-Restart=always
-RestartSec=5s
+Restart=on-failure
+RestartSec=10s
 LimitNOFILE=1048576
 
 [Install]
