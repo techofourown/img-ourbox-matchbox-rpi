@@ -1,3 +1,10 @@
+## [0.3.6](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.5...v0.3.6) (2026-02-13)
+
+
+### Bug Fixes
+
+* **installer:** wait for exactly 2 NVMe disks before proceeding ([8c1ae5e](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/8c1ae5e4e2a559c0d53773c40e592ff0a43dc1d8))
+
 ## [0.3.5](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.4...v0.3.5) (2026-02-13)
 
 
