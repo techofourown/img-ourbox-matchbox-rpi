@@ -1,3 +1,10 @@
+## [0.5.3](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.5.2...v0.5.3) (2026-02-14)
+
+
+### Bug Fixes
+
+* **bootstrap:** eliminate DHCP race and restore reliable first-boot networking ([eee33bb](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/eee33bb800516fc987e145148bb7bc40287366e7))
+
 ## [0.5.2](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.5.1...v0.5.2) (2026-02-13)
 
 
