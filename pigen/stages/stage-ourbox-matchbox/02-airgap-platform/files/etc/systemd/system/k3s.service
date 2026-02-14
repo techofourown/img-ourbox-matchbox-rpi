@@ -9,7 +9,7 @@ StartLimitIntervalSec=0
 Type=simple
 ExecStartPre=/usr/local/sbin/ourbox-k3s-prep
 ExecStart=/usr/local/bin/k3s server --config /etc/rancher/k3s/config.yaml
-Restart=on-failure
+Restart=always
 RestartSec=10s
 LimitNOFILE=1048576
 

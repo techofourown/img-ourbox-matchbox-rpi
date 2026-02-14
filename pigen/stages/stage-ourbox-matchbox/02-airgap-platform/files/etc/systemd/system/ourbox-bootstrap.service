@@ -10,7 +10,7 @@ StartLimitIntervalSec=0
 Type=oneshot
 ExecStart=/usr/local/sbin/ourbox-bootstrap
 RemainAfterExit=yes
-TimeoutStartSec=infinity
+TimeoutStartSec=900
 Restart=on-failure
 RestartSec=30s
 

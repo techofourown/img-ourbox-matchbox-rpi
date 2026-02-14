@@ -103,11 +103,14 @@ for f in /opt/ourbox/airgap/platform/manifests/*.yaml; do
   /usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" apply -f "$f"
 done
 
-# Wait for Traefik IngressRoute CRD before applying ingress routes
+# Wait for Traefik IngressRoute CRD before applying ingress routes.
+# If Traefik never deploys, skip ingress — core platform still works.
 log "Waiting for Traefik IngressRoute CRD..."
+TRAEFIK_READY=false
 for i in $(seq 1 120); do
   if /usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" \
       get crd ingressroutes.traefik.io >/dev/null 2>&1; then
+    TRAEFIK_READY=true
     break
   fi
   if (( i % 10 == 0 )); then
@@ -116,9 +119,15 @@ for i in $(seq 1 120); do
   sleep 1
 done
 
-log "Applying ingress routes"
-/usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" \
-  apply -f /opt/ourbox/airgap/platform/manifests/50-ingress.yaml
+if [[ "${TRAEFIK_READY}" == "true" ]]; then
+  log "Applying ingress routes"
+  /usr/local/bin/k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" \
+    apply -f /opt/ourbox/airgap/platform/manifests/50-ingress.yaml || \
+    log "WARNING: Failed to apply ingress routes (non-fatal)"
+else
+  log "WARNING: Traefik CRDs not available after 120s — skipping ingress routes."
+  log "Apps are still accessible via NodePort (landing page on :30080)."
+fi
 
 date -Is > "$MARKER"
 echo "OurBox bootstrap complete. device_id=${DEVICE_ID}"
