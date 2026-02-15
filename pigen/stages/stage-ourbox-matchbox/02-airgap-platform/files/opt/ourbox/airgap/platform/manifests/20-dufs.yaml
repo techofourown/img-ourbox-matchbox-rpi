@@ -13,11 +13,12 @@ spec:
       labels:
         app: dufs
     spec:
+      enableServiceLinks: false
       containers:
         - name: dufs
           image: sigoden/dufs:v0.42.0
           imagePullPolicy: Never
-          args: ["/data"]
+          args: ["/data", "-A"]
           ports:
             - containerPort: 5000
           volumeMounts:

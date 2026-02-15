@@ -13,6 +13,7 @@ spec:
       labels:
         app: flatnotes
     spec:
+      enableServiceLinks: false
       containers:
         - name: flatnotes
           image: dullage/flatnotes:v5.0.0

@@ -16,6 +16,10 @@ HOSTNAME="$(hostname)"
 
 mkdir -p /run/ourbox
 
+# Always start loud on boot so users see progress on the console.
+# `matchbox quiet` can re-silence after boot if desired.
+rm -f "$QUIET_MARKER"
+
 check_data_mount() {
   mountpoint -q /var/lib/ourbox 2>/dev/null
 }
@@ -30,7 +34,10 @@ check_k3s_api() {
 }
 
 check_traefik() {
-  ss -tlnp 2>/dev/null | grep -q ':80 '
+  # Traefik may return 404 for unmatched Host, so any HTTP response means it's up.
+  local rc
+  rc=$(curl -s -o /dev/null -w '%{http_code}' -m 2 http://127.0.0.1/ 2>/dev/null) || true
+  [[ -n "$rc" && "$rc" != "000" ]]
 }
 
 check_mdns() {
@@ -144,7 +151,13 @@ format_status() {
     out+="    http://todo.${HOSTNAME}.local"
     out+=$'\n'
     out+=$'\n'
-    out+="    Run \"matchbox quiet\" to silence this message."
+    out+="    Commands:"
+    out+=$'\n'
+    out+="      matchbox status  — show this status"
+    out+=$'\n'
+    out+="      matchbox quiet   — silence console output"
+    out+=$'\n'
+    out+="      matchbox loud    — resume console output"
     out+=$'\n'
     out+="  ========================================"
     out+=$'\n'

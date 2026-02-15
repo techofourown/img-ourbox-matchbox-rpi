@@ -5,6 +5,16 @@ metadata:
   namespace: ourbox-system
 spec:
   rules:
+    - host: ourbox-matchbox.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: landing
+                port:
+                  number: 80
     - host: files.ourbox-matchbox.local
       http:
         paths:
