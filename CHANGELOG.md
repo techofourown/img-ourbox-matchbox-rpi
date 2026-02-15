@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.6...v0.4.0) (2026-02-15)
+
+
+### Features
+
+* **platform:** add apps, Traefik ingress, and mDNS with safe networking ([2f1e8d1](https://github.com/techofourown/img-ourbox-matchbox-rpi/commit/2f1e8d19d4895832e968081e7c9127878fb74b24))
+
 ## [0.3.6](https://github.com/techofourown/img-ourbox-matchbox-rpi/compare/v0.3.5...v0.3.6) (2026-02-13)
 
 
