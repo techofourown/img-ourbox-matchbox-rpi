@@ -17,14 +17,29 @@ if [[ -f "${AIRGAP}/manifest.env" ]]; then
 fi
 
 : "${NGINX_IMAGE:=docker.io/library/nginx:1.27-alpine}"
-NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+: "${DUFS_IMAGE:=docker.io/sigoden/dufs:v0.42.0}"
+: "${FLATNOTES_IMAGE:=docker.io/dullage/flatnotes:v5.0.0}"
 
-# Refuse to build if the airgap artifacts aren’t present
+NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+DUFS_TAR="$(echo "${DUFS_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+FLATNOTES_TAR="$(echo "${FLATNOTES_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+
+# Refuse to build if the airgap artifacts aren't present
 test -x "${AIRGAP}/k3s/k3s" || { echo "ERROR: missing ${AIRGAP}/k3s/k3s" >&2; exit 1; }
 test -f "${AIRGAP}/k3s/k3s-airgap-images-arm64.tar" || { echo "ERROR: missing ${AIRGAP}/k3s/k3s-airgap-images-arm64.tar" >&2; exit 1; }
 test -f "${AIRGAP}/platform/images/${NGINX_TAR}" || {
   echo "ERROR: missing ${AIRGAP}/platform/images/${NGINX_TAR}" >&2
   echo "Found in ${AIRGAP}/platform/images:" >&2
+  ls -lah "${AIRGAP}/platform/images" >&2 || true
+  exit 1
+}
+test -f "${AIRGAP}/platform/images/${DUFS_TAR}" || {
+  echo "ERROR: missing ${AIRGAP}/platform/images/${DUFS_TAR}" >&2
+  ls -lah "${AIRGAP}/platform/images" >&2 || true
+  exit 1
+}
+test -f "${AIRGAP}/platform/images/${FLATNOTES_TAR}" || {
+  echo "ERROR: missing ${AIRGAP}/platform/images/${FLATNOTES_TAR}" >&2
   ls -lah "${AIRGAP}/platform/images" >&2 || true
   exit 1
 }
@@ -42,6 +57,26 @@ install -D -m 0644 \
 install -D -m 0644 \
   "${AIRGAP}/platform/images/${NGINX_TAR}" \
   "${ROOTFS_DIR}/opt/ourbox/airgap/platform/images/${NGINX_TAR}"
+
+install -D -m 0644 \
+  "${AIRGAP}/platform/images/${DUFS_TAR}" \
+  "${ROOTFS_DIR}/opt/ourbox/airgap/platform/images/${DUFS_TAR}"
+
+install -D -m 0644 \
+  "${AIRGAP}/platform/images/${FLATNOTES_TAR}" \
+  "${ROOTFS_DIR}/opt/ourbox/airgap/platform/images/${FLATNOTES_TAR}"
+
+echo "==> Copying Todo Bloom static files"
+test -d "${AIRGAP}/platform/todo-bloom" || {
+  echo "ERROR: missing ${AIRGAP}/platform/todo-bloom" >&2
+  exit 1
+}
+install -d -m 0755 "${ROOTFS_DIR}/opt/ourbox/airgap/platform/todo-bloom"
+install -m 0644 \
+  "${AIRGAP}/platform/todo-bloom/index.html" \
+  "${AIRGAP}/platform/todo-bloom/app.js" \
+  "${AIRGAP}/platform/todo-bloom/styles.css" \
+  "${ROOTFS_DIR}/opt/ourbox/airgap/platform/todo-bloom/"
 
 echo "==> Installing platform manifests + systemd units + bootstrap script"
 cp -a "${SCRIPT_DIR}/files/." "${ROOTFS_DIR}/"

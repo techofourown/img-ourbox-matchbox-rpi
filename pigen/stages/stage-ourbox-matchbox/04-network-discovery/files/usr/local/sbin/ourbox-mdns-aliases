@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOSTNAME="$(hostname)"
+ALIASES=(
+  "files.${HOSTNAME}.local"
+  "notes.${HOSTNAME}.local"
+  "todo.${HOSTNAME}.local"
+)
+
+# Wait for a global IPv4 (up to 60s — first boot DHCP can be slow)
+IP=""
+for _i in $(seq 1 60); do
+  IP="$(ip -o -4 addr show scope global up 2>/dev/null \
+    | awk '{split($4,a,"/"); print a[1]}' | head -n1)"
+  [[ -n "${IP}" ]] && break
+  sleep 1
+done
+
+if [[ -z "${IP}" ]]; then
+  echo "ERROR: no IP address after 60s; cannot publish mDNS aliases" >&2
+  exit 1
+fi
+
+echo "Publishing mDNS aliases for ${IP}:"
+PIDS=()
+for alias in "${ALIASES[@]}"; do
+  echo "  ${alias}"
+  avahi-publish-address -R "${alias}" "${IP}" &
+  PIDS+=($!)
+done
+
+wait "${PIDS[@]}"

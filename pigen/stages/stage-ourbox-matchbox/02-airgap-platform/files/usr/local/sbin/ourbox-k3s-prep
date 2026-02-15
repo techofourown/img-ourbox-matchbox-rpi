@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ourbox-k3s-prep — ExecStartPre gate for k3s.service
+#
+# Waits for a real global IPv4 address (from DHCP) before allowing k3s to start.
+# This prevents k3s from starting before the network is ready, which would cause
+# flannel and ServiceLB to create broken nftables rules.
+#
+# This script does NOT write k3s config — that is handled by ourbox-bootstrap
+# on first boot and persists across reboots.
+
+log(){ echo "[ourbox-k3s-prep] $*"; }
+
+MAX_WAIT=120
+
+log "Waiting for a global IPv4 address (up to ${MAX_WAIT}s)..."
+IP=""
+for i in $(seq 1 "${MAX_WAIT}"); do
+  IP="$(ip -o -4 addr show scope global up 2>/dev/null \
+    | awk '{split($4,a,"/"); print a[1]}' | head -n1)"
+  if [[ -n "${IP}" ]]; then
+    log "Network ready: ${IP} (after ${i}s)"
+    exit 0
+  fi
+  sleep 1
+done
+
+log "ERROR: No global IPv4 address after ${MAX_WAIT}s. k3s will not start."
+log "Check DHCP and network cable."
+exit 1

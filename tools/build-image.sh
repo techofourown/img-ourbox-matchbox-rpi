@@ -46,6 +46,14 @@ source "${ROOT}/tools/registry.sh"
 NGINX_IMAGE="$(canonicalize_image_ref "${NGINX_IMAGE}")"
 NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
 
+: "${DUFS_IMAGE:=docker.io/sigoden/dufs:v0.42.0}"
+DUFS_IMAGE="$(canonicalize_image_ref "${DUFS_IMAGE}")"
+DUFS_TAR="$(echo "${DUFS_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+
+: "${FLATNOTES_IMAGE:=docker.io/dullage/flatnotes:v5.0.0}"
+FLATNOTES_IMAGE="$(canonicalize_image_ref "${FLATNOTES_IMAGE}")"
+FLATNOTES_TAR="$(echo "${FLATNOTES_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+
 # Pick a container CLI (caller can override with DOCKER=...)
 DOCKER="${DOCKER:-$(pick_container_cli)}"
 export DOCKER
@@ -93,6 +101,9 @@ log "Preflight: verifying airgap artifacts exist"
 [[ -x "${ROOT}/artifacts/airgap/k3s/k3s" ]] || die "missing k3s binary; run ./tools/fetch-airgap-platform.sh"
 [[ -f "${ROOT}/artifacts/airgap/k3s/k3s-airgap-images-arm64.tar" ]] || die "missing k3s airgap tar; run ./tools/fetch-airgap-platform.sh"
 [[ -f "${ROOT}/artifacts/airgap/platform/images/${NGINX_TAR}" ]] || die "missing nginx tar; run ./tools/fetch-airgap-platform.sh"
+[[ -f "${ROOT}/artifacts/airgap/platform/images/${DUFS_TAR}" ]] || die "missing dufs tar; run ./tools/fetch-airgap-platform.sh"
+[[ -f "${ROOT}/artifacts/airgap/platform/images/${FLATNOTES_TAR}" ]] || die "missing flatnotes tar; run ./tools/fetch-airgap-platform.sh"
+[[ -d "${ROOT}/artifacts/airgap/platform/todo-bloom" ]] || die "missing todo-bloom static files; run ./tools/fetch-airgap-platform.sh"
 
 if $DOCKER ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'pigen_work'; then
   log "Removing stale pi-gen container: pigen_work"

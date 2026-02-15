@@ -18,6 +18,8 @@ cd "${ROOT}"
 
 : "${K3S_VERSION:=}"
 : "${NGINX_IMAGE:=docker.io/library/nginx:1.27-alpine}"
+: "${DUFS_IMAGE:=docker.io/sigoden/dufs:v0.42.0}"
+: "${FLATNOTES_IMAGE:=docker.io/dullage/flatnotes:v5.0.0}"
 
 if [[ -z "${K3S_VERSION}" ]]; then
   if [[ "${RESOLVE_LATEST_K3S:-0}" == "1" ]]; then
@@ -34,18 +36,27 @@ if [[ -z "${K3S_VERSION}" ]]; then
 fi
 
 NGINX_IMAGE="$(canonicalize_image_ref "${NGINX_IMAGE}")"
+DUFS_IMAGE="$(canonicalize_image_ref "${DUFS_IMAGE}")"
+FLATNOTES_IMAGE="$(canonicalize_image_ref "${FLATNOTES_IMAGE}")"
 
 log "Using K3S_VERSION=${K3S_VERSION}"
 log "Using NGINX_IMAGE=${NGINX_IMAGE}"
+log "Using DUFS_IMAGE=${DUFS_IMAGE}"
+log "Using FLATNOTES_IMAGE=${FLATNOTES_IMAGE}"
 
 # Preflight: check for existing artifacts that would block fetch
 log "Preflight: checking for existing artifacts (fetch script will not overwrite)"
 NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+DUFS_TAR="$(echo "${DUFS_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
+FLATNOTES_TAR="$(echo "${FLATNOTES_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
 
 blocking_files=()
 [[ -f "artifacts/airgap/k3s/k3s" ]] && blocking_files+=("artifacts/airgap/k3s/k3s")
 [[ -f "artifacts/airgap/k3s/k3s-airgap-images-arm64.tar" ]] && blocking_files+=("artifacts/airgap/k3s/k3s-airgap-images-arm64.tar")
 [[ -f "artifacts/airgap/platform/images/${NGINX_TAR}" ]] && blocking_files+=("artifacts/airgap/platform/images/${NGINX_TAR}")
+[[ -f "artifacts/airgap/platform/images/${DUFS_TAR}" ]] && blocking_files+=("artifacts/airgap/platform/images/${DUFS_TAR}")
+[[ -f "artifacts/airgap/platform/images/${FLATNOTES_TAR}" ]] && blocking_files+=("artifacts/airgap/platform/images/${FLATNOTES_TAR}")
+[[ -d "artifacts/airgap/platform/todo-bloom" ]] && blocking_files+=("artifacts/airgap/platform/todo-bloom")
 
 if (( ${#blocking_files[@]} > 0 )); then
   log "ERROR: Existing artifacts detected (refusing to overwrite):"
@@ -83,7 +94,7 @@ if (( ${#blocking_files[@]} > 0 )); then
 fi
 
 OUT="artifacts/airgap"
-mkdir -p "$OUT/k3s" "$OUT/platform/images"
+mkdir -p "$OUT/k3s" "$OUT/platform/images" "$OUT/platform/todo-bloom"
 
 log "Fetch k3s binary (arm64) @ ${K3S_VERSION}"
 curl -fsSL \
@@ -124,11 +135,69 @@ case "$(cli_base "${CLI}")" in
     ;;
 esac
 
+log "Pull + save dufs image (arm64): ${DUFS_IMAGE}"
+
+case "$(cli_base "${CLI}")" in
+  nerdctl|docker)
+    # shellcheck disable=SC2086
+    $CLI pull --platform=linux/arm64 "${DUFS_IMAGE}"
+    if [[ "$(cli_base "${CLI}")" = "nerdctl" ]]; then
+      # shellcheck disable=SC2086
+      $CLI save --platform=linux/arm64 -o "$OUT/platform/images/${DUFS_TAR}" "${DUFS_IMAGE}"
+    else
+      # shellcheck disable=SC2086
+      $CLI save -o "$OUT/platform/images/${DUFS_TAR}" "${DUFS_IMAGE}"
+    fi
+    ;;
+  podman)
+    # shellcheck disable=SC2086
+    $CLI pull --arch=arm64 --os=linux "${DUFS_IMAGE}"
+    # shellcheck disable=SC2086
+    $CLI save -o "$OUT/platform/images/${DUFS_TAR}" "${DUFS_IMAGE}"
+    ;;
+  *)
+    die "Unsupported container CLI: ${CLI}"
+    ;;
+esac
+
+log "Pull + save flatnotes image (arm64): ${FLATNOTES_IMAGE}"
+
+case "$(cli_base "${CLI}")" in
+  nerdctl|docker)
+    # shellcheck disable=SC2086
+    $CLI pull --platform=linux/arm64 "${FLATNOTES_IMAGE}"
+    if [[ "$(cli_base "${CLI}")" = "nerdctl" ]]; then
+      # shellcheck disable=SC2086
+      $CLI save --platform=linux/arm64 -o "$OUT/platform/images/${FLATNOTES_TAR}" "${FLATNOTES_IMAGE}"
+    else
+      # shellcheck disable=SC2086
+      $CLI save -o "$OUT/platform/images/${FLATNOTES_TAR}" "${FLATNOTES_IMAGE}"
+    fi
+    ;;
+  podman)
+    # shellcheck disable=SC2086
+    $CLI pull --arch=arm64 --os=linux "${FLATNOTES_IMAGE}"
+    # shellcheck disable=SC2086
+    $CLI save -o "$OUT/platform/images/${FLATNOTES_TAR}" "${FLATNOTES_IMAGE}"
+    ;;
+  *)
+    die "Unsupported container CLI: ${CLI}"
+    ;;
+esac
+
+TODO_BLOOM_REPO="https://raw.githubusercontent.com/EverybodyCode/todo/main"
+log "Fetch Todo Bloom static files from ${TODO_BLOOM_REPO}"
+curl -fsSL -o "$OUT/platform/todo-bloom/index.html" "${TODO_BLOOM_REPO}/index.html"
+curl -fsSL -o "$OUT/platform/todo-bloom/app.js"     "${TODO_BLOOM_REPO}/app.js"
+curl -fsSL -o "$OUT/platform/todo-bloom/styles.css"  "${TODO_BLOOM_REPO}/styles.css"
+
 log "Writing airgap manifest"
 cat > "$OUT/manifest.env" <<EOF_MANIFEST
 K3S_VERSION=${K3S_VERSION}
 NGINX_IMAGE=${NGINX_IMAGE}
+DUFS_IMAGE=${DUFS_IMAGE}
+FLATNOTES_IMAGE=${FLATNOTES_IMAGE}
 EOF_MANIFEST
 
 log "Artifacts created:"
-ls -lah "$OUT/k3s" "$OUT/platform/images" "$OUT/manifest.env"
+ls -lah "$OUT/k3s" "$OUT/platform/images" "$OUT/platform/todo-bloom" "$OUT/manifest.env"
