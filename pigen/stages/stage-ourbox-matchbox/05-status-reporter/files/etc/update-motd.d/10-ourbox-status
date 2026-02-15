@@ -1,0 +1,12 @@
+#!/bin/bash
+STATUS_FILE="/run/ourbox/status"
+if [[ -f "$STATUS_FILE" ]]; then
+  echo ""
+  cat "$STATUS_FILE"
+  echo ""
+else
+  echo ""
+  echo "OurBox Matchbox: status service starting..."
+  echo "Run \"matchbox status\" to check, or wait a moment and reconnect."
+  echo ""
+fi

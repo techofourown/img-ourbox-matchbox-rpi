@@ -1,0 +1,13 @@
+[Unit]
+Description=OurBox boot status reporter
+After=local-fs.target
+DefaultDependencies=no
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/ourbox-status
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

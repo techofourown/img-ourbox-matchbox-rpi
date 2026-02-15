@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATUS_FILE="/run/ourbox/status"
+QUIET_MARKER="/var/lib/ourbox/state/quiet"
+
+usage() {
+  echo "Usage: matchbox [command]"
+  echo ""
+  echo "Commands:"
+  echo "  status   Show current system status (default)"
+  echo "  quiet    Silence console status messages"
+  echo "  loud     Resume console status messages"
+  echo ""
+}
+
+cmd_status() {
+  if [[ -f "$STATUS_FILE" ]]; then
+    cat "$STATUS_FILE"
+  else
+    echo "Status service not running yet. Try: journalctl -u ourbox-status"
+  fi
+}
+
+cmd_quiet() {
+  mkdir -p "$(dirname "$QUIET_MARKER")"
+  touch "$QUIET_MARKER"
+  echo "Console status messages silenced."
+  echo "Run \"matchbox loud\" to resume, or \"matchbox status\" to check status."
+}
+
+cmd_loud() {
+  rm -f "$QUIET_MARKER"
+  echo "Console status messages resumed."
+}
+
+case "${1:-status}" in
+  status)  cmd_status ;;
+  quiet)   cmd_quiet ;;
+  loud)    cmd_loud ;;
+  -h|--help|help) usage ;;
+  *)
+    echo "Unknown command: $1" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

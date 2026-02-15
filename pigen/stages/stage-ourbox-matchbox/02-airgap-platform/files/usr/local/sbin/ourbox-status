@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ourbox-status — persistent boot-time status reporter
+#
+# Polls system state every 10s during boot, writes to /dev/console (HDMI/serial)
+# and /run/ourbox/status (read by MOTD and `matchbox status`).
+# Switches to 60s interval once all services are ready.
+# Silenced by `matchbox quiet` (creates /var/lib/ourbox/state/quiet).
+
+QUIET_MARKER="/var/lib/ourbox/state/quiet"
+STATUS_FILE="/run/ourbox/status"
+BOOT_INTERVAL=10
+READY_INTERVAL=60
+HOSTNAME="$(hostname)"
+
+mkdir -p /run/ourbox
+
+check_data_mount() {
+  mountpoint -q /var/lib/ourbox 2>/dev/null
+}
+
+check_network() {
+  ip -o -4 addr show scope global up 2>/dev/null \
+    | awk '{split($4,a,"/"); print a[1]}' | head -n1
+}
+
+check_k3s_api() {
+  /usr/local/bin/k3s kubectl get nodes --no-headers 2>/dev/null | grep -q .
+}
+
+check_traefik() {
+  ss -tlnp 2>/dev/null | grep -q ':80 '
+}
+
+check_mdns() {
+  systemctl is-active --quiet ourbox-mdns-aliases 2>/dev/null
+}
+
+check_bootstrap_done() {
+  [[ -f /var/lib/ourbox/state/bootstrap.done ]]
+}
+
+check_pods_ready() {
+  local total ready
+  total="$(/usr/local/bin/k3s kubectl get pods -n ourbox-system --no-headers 2>/dev/null | wc -l)"
+  ready="$(/usr/local/bin/k3s kubectl get pods -n ourbox-system --no-headers 2>/dev/null | grep -c 'Running' || true)"
+  if (( total > 0 && total == ready )); then
+    return 0
+  fi
+  echo "${ready}/${total}"
+  return 1
+}
+
+is_first_boot() {
+  ! [[ -f /var/lib/ourbox/state/bootstrap.done ]]
+}
+
+format_status() {
+  local ip="$1"
+  local data_ok="$2" net_ok="$3" k3s_ok="$4" traefik_ok="$5"
+  local mdns_ok="$6" bootstrap_ok="$7" pods_info="$8"
+  local all_ready="$9"
+
+  local mark_ok="OK" mark_wait=".." mark_no="  "
+  local out=""
+
+  out+="--- OurBox Matchbox Status ---"
+  out+=$'\n'
+
+  if [[ "$data_ok" == "1" ]]; then
+    out+="  [${mark_ok}] DATA disk mounted"
+  else
+    out+="  [${mark_wait}] DATA disk: waiting for mount"
+  fi
+  out+=$'\n'
+
+  if [[ "$net_ok" == "1" ]]; then
+    out+="  [${mark_ok}] Network: ${ip}"
+  else
+    out+="  [${mark_wait}] Network: waiting for DHCP"
+  fi
+  out+=$'\n'
+
+  if [[ "$k3s_ok" == "1" ]]; then
+    out+="  [${mark_ok}] k3s API: running"
+  elif [[ "$net_ok" == "1" ]]; then
+    out+="  [${mark_wait}] k3s API: starting"
+  else
+    out+="  [${mark_no}] k3s API: waiting for network"
+  fi
+  out+=$'\n'
+
+  if [[ "$traefik_ok" == "1" ]]; then
+    out+="  [${mark_ok}] Traefik: listening on port 80"
+  elif [[ "$k3s_ok" == "1" ]]; then
+    out+="  [${mark_wait}] Traefik: deploying"
+  else
+    out+="  [${mark_no}] Traefik: waiting for k3s"
+  fi
+  out+=$'\n'
+
+  if [[ "$k3s_ok" == "1" ]]; then
+    if [[ "$pods_info" == "ready" ]]; then
+      out+="  [${mark_ok}] Apps: all running"
+    else
+      out+="  [${mark_wait}] Apps: ${pods_info} pods running"
+    fi
+  else
+    out+="  [${mark_no}] Apps: waiting for k3s"
+  fi
+  out+=$'\n'
+
+  if [[ "$mdns_ok" == "1" ]]; then
+    out+="  [${mark_ok}] mDNS: aliases published"
+  elif [[ "$net_ok" == "1" ]]; then
+    out+="  [${mark_wait}] mDNS: starting"
+  else
+    out+="  [${mark_no}] mDNS: waiting for network"
+  fi
+  out+=$'\n'
+
+  if [[ "$bootstrap_ok" != "1" ]]; then
+    out+=$'\n'
+    out+="  First boot in progress — this takes several minutes."
+    out+=$'\n'
+    out+="  Do not power off the device."
+    out+=$'\n'
+  fi
+
+  if [[ "$all_ready" == "1" ]]; then
+    out+=$'\n'
+    out+="  ========================================"
+    out+=$'\n'
+    out+="    OurBox Matchbox is READY"
+    out+=$'\n'
+    out+=$'\n'
+    out+="    http://${HOSTNAME}.local"
+    out+=$'\n'
+    out+="    http://files.${HOSTNAME}.local"
+    out+=$'\n'
+    out+="    http://notes.${HOSTNAME}.local"
+    out+=$'\n'
+    out+="    http://todo.${HOSTNAME}.local"
+    out+=$'\n'
+    out+=$'\n'
+    out+="    Run \"matchbox quiet\" to silence this message."
+    out+=$'\n'
+    out+="  ========================================"
+    out+=$'\n'
+  fi
+
+  echo "$out"
+}
+
+was_ready=false
+
+while true; do
+  # Gather state
+  data_ok=0; check_data_mount && data_ok=1
+  net_ok=0; ip=""; ip="$(check_network)"; [[ -n "$ip" ]] && net_ok=1
+  k3s_ok=0; check_k3s_api && k3s_ok=1
+  traefik_ok=0; check_traefik && traefik_ok=1
+  mdns_ok=0; check_mdns && mdns_ok=1
+  bootstrap_ok=0; check_bootstrap_done && bootstrap_ok=1
+
+  pods_info="0/0"
+  if [[ "$k3s_ok" == "1" ]]; then
+    pods_info="$(check_pods_ready)" && pods_info="ready"
+  fi
+
+  all_ready=0
+  if [[ "$data_ok$net_ok$k3s_ok$traefik_ok$mdns_ok" == "11111" && "$pods_info" == "ready" ]]; then
+    all_ready=1
+  fi
+
+  # Format and write status
+  status="$(format_status "$ip" "$data_ok" "$net_ok" "$k3s_ok" "$traefik_ok" \
+    "$mdns_ok" "$bootstrap_ok" "$pods_info" "$all_ready")"
+
+  # Always write to status file (for MOTD and `matchbox status`)
+  echo "$status" > "${STATUS_FILE}"
+
+  # Write to console unless silenced
+  if [[ ! -f "$QUIET_MARKER" ]]; then
+    echo "" > /dev/console 2>/dev/null || true
+    echo "$status" > /dev/console 2>/dev/null || true
+  fi
+
+  # Choose interval
+  if [[ "$all_ready" == "1" ]]; then
+    if [[ "$was_ready" == "false" ]]; then
+      was_ready=true
+    fi
+    sleep "$READY_INTERVAL"
+  else
+    sleep "$BOOT_INTERVAL"
+  fi
+done
