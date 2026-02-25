@@ -20,6 +20,7 @@ Model identifies the physical hardware class; SKU identifies the exact bill-of-m
 ## Happy path (desktop → installer media → Pi NVMe install)
 
 ```bash
+cd ~
 git clone --recurse-submodules https://github.com/techofourown/img-ourbox-matchbox-rpi.git
 cd img-ourbox-matchbox-rpi
 ./tools/prepare-installer-media.sh
