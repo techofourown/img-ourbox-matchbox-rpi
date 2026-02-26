@@ -90,14 +90,29 @@ CONTRACT_DIGEST_FILE="${ROOTFS_DIR}/opt/ourbox/airgap/platform/contract.digest"
 [[ -f "${CONTRACT_ENV}" ]] || { echo "ERROR: missing ${CONTRACT_ENV} (did you sync the platform contract?)" >&2; exit 1; }
 [[ -f "${CONTRACT_DIGEST_FILE}" ]] || { echo "ERROR: missing ${CONTRACT_DIGEST_FILE} (did you sync the platform contract?)" >&2; exit 1; }
 
-# Append contract.env contents (which contains OURBOX_PLATFORM_CONTRACT_* keys)
-# shellcheck disable=SC1090
-source "${CONTRACT_ENV}"
+# Remove any existing contract lines to avoid duplicates on reruns
+tmp_release="$(mktemp)"
+grep -v '^OURBOX_PLATFORM_CONTRACT_' "${RELEASE_FILE}" > "${tmp_release}"
+mv "${tmp_release}" "${RELEASE_FILE}"
+
+CONTRACT_SOURCE="unknown"
+CONTRACT_REVISION="unknown"
+CONTRACT_VERSION="unknown"
+CONTRACT_CREATED="unknown"
+
+while IFS='=' read -r key value; do
+  case "${key}" in
+    OURBOX_PLATFORM_CONTRACT_SOURCE) CONTRACT_SOURCE="${value}" ;;
+    OURBOX_PLATFORM_CONTRACT_REVISION) CONTRACT_REVISION="${value}" ;;
+    OURBOX_PLATFORM_CONTRACT_VERSION) CONTRACT_VERSION="${value}" ;;
+    OURBOX_PLATFORM_CONTRACT_CREATED) CONTRACT_CREATED="${value}" ;;
+  esac
+done < "${CONTRACT_ENV}"
 
 {
   echo "OURBOX_PLATFORM_CONTRACT_DIGEST=$(cat "${CONTRACT_DIGEST_FILE}")"
-  echo "OURBOX_PLATFORM_CONTRACT_SOURCE=${OURBOX_PLATFORM_CONTRACT_SOURCE:-unknown}"
-  echo "OURBOX_PLATFORM_CONTRACT_REVISION=${OURBOX_PLATFORM_CONTRACT_REVISION:-unknown}"
-  echo "OURBOX_PLATFORM_CONTRACT_VERSION=${OURBOX_PLATFORM_CONTRACT_VERSION:-unknown}"
-  echo "OURBOX_PLATFORM_CONTRACT_CREATED=${OURBOX_PLATFORM_CONTRACT_CREATED:-unknown}"
+  echo "OURBOX_PLATFORM_CONTRACT_SOURCE=${CONTRACT_SOURCE}"
+  echo "OURBOX_PLATFORM_CONTRACT_REVISION=${CONTRACT_REVISION}"
+  echo "OURBOX_PLATFORM_CONTRACT_VERSION=${CONTRACT_VERSION}"
+  echo "OURBOX_PLATFORM_CONTRACT_CREATED=${CONTRACT_CREATED}"
 } >> "${RELEASE_FILE}"

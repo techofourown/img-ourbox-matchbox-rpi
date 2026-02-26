@@ -142,7 +142,7 @@ install_oras() {
   fi
 
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf '"'"'"'${tmpdir}'"'"'"'' EXIT
+  trap 'rm -rf "${tmpdir}"' RETURN
 
   curl -fsSL -o "${tmpdir}/oras.tgz" "${url}"
   tar -C "${tmpdir}" -xzf "${tmpdir}/oras.tgz" oras

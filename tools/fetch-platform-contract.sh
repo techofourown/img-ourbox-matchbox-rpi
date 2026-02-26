@@ -8,7 +8,7 @@ REF_FILE="${ROOT}/contracts/platform-contract.ref"
 REF="$(cat "${REF_FILE}")"
 
 command -v oras >/dev/null 2>&1 || {
-  echo "oras is required. Run ./tools/bootstrap-host.sh (after we update it) or install oras." >&2
+  echo "oras is required. Run ./tools/bootstrap-host.sh or install ORAS v${ORAS_VERSION:-1.3.0}." >&2
   exit 1
 }
 
