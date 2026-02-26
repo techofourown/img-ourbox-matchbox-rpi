@@ -80,3 +80,40 @@ install -m 0644 \
 
 echo "==> Installing platform manifests + systemd units + bootstrap script"
 cp -a "${SCRIPT_DIR}/files/." "${ROOTFS_DIR}/"
+
+echo "==> Recording platform contract metadata in /etc/ourbox/release"
+RELEASE_FILE="${ROOTFS_DIR}/etc/ourbox/release"
+CONTRACT_ENV="${ROOTFS_DIR}/opt/ourbox/airgap/platform/contract.env"
+CONTRACT_DIGEST_FILE="${ROOTFS_DIR}/opt/ourbox/airgap/platform/contract.digest"
+
+[[ -f "${RELEASE_FILE}" ]] || { echo "ERROR: missing ${RELEASE_FILE}" >&2; exit 1; }
+[[ -f "${CONTRACT_ENV}" ]] || { echo "ERROR: missing ${CONTRACT_ENV} (did you sync the platform contract?)" >&2; exit 1; }
+[[ -f "${CONTRACT_DIGEST_FILE}" ]] || { echo "ERROR: missing ${CONTRACT_DIGEST_FILE} (did you sync the platform contract?)" >&2; exit 1; }
+
+# Remove any existing contract lines to avoid duplicates on reruns
+tmp_release="$(mktemp)"
+grep -v '^OURBOX_PLATFORM_CONTRACT_' "${RELEASE_FILE}" > "${tmp_release}" || true
+cat "${tmp_release}" > "${RELEASE_FILE}"
+rm -f "${tmp_release}"
+
+CONTRACT_SOURCE="unknown"
+CONTRACT_REVISION="unknown"
+CONTRACT_VERSION="unknown"
+CONTRACT_CREATED="unknown"
+
+while IFS='=' read -r key value; do
+  case "${key}" in
+    OURBOX_PLATFORM_CONTRACT_SOURCE) CONTRACT_SOURCE="${value}" ;;
+    OURBOX_PLATFORM_CONTRACT_REVISION) CONTRACT_REVISION="${value}" ;;
+    OURBOX_PLATFORM_CONTRACT_VERSION) CONTRACT_VERSION="${value}" ;;
+    OURBOX_PLATFORM_CONTRACT_CREATED) CONTRACT_CREATED="${value}" ;;
+  esac
+done < "${CONTRACT_ENV}"
+
+{
+  echo "OURBOX_PLATFORM_CONTRACT_DIGEST=$(cat "${CONTRACT_DIGEST_FILE}")"
+  echo "OURBOX_PLATFORM_CONTRACT_SOURCE=${CONTRACT_SOURCE}"
+  echo "OURBOX_PLATFORM_CONTRACT_REVISION=${CONTRACT_REVISION}"
+  echo "OURBOX_PLATFORM_CONTRACT_VERSION=${CONTRACT_VERSION}"
+  echo "OURBOX_PLATFORM_CONTRACT_CREATED=${CONTRACT_CREATED}"
+} >> "${RELEASE_FILE}"
