@@ -32,6 +32,8 @@ else
   [[ -n "${REF}" ]] || die "Usage: $0 IMAGE_REF [OUTDIR]  or  $0 --latest [OUTDIR]"
 fi
 
+mkdir -p "${OUTDIR}"
+
 log ">> Pull: ${REF}"
 maybe_login
 oras pull "${REF}" -o "${OUTDIR}"

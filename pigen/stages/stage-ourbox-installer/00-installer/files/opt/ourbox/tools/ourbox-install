@@ -28,8 +28,8 @@ need_cmd tar
 
 DATA_CHECK_MP="/run/ourbox-installer/data-check"
 SYS_BOOT_MP="/run/ourbox-installer/sys-boot"
-PAYLOAD_DIR="/run/ourbox-installer/payload"
-CATALOG_DIR="/run/ourbox-installer/catalog"
+PAYLOAD_DIR="/opt/ourbox/installer/cache/payload"
+CATALOG_DIR="/opt/ourbox/installer/cache/catalog"
 DEFAULTS_ENV="/opt/ourbox/installer/defaults.env"
 OVERRIDE_ENV="/boot/firmware/ourbox-installer.env"
 
@@ -277,6 +277,19 @@ ensure_dirs() {
   mkdir -p "${PAYLOAD_DIR}" "${CATALOG_DIR}"
 }
 
+wait_for_network() {
+  local retries=40
+  local ok=0
+  for _i in $(seq 1 "${retries}"); do
+    if ip -o -4 addr show up scope global | grep -q .; then
+      ok=1
+      break
+    fi
+    sleep 0.5
+  done
+  [[ "${ok}" -eq 1 ]] || die "network not ready (no global IPv4 after ${retries} attempts)"
+}
+
 banner() {
   echo "=================================================================="
   echo "OurBox Matchbox Installer"
@@ -330,15 +343,15 @@ pull_catalog() {
   log "Pulling catalog: ${ref}"
   if oras pull "${ref}" -o "${dst}" >/dev/null 2>&1; then
     [[ -f "${dst}/catalog.tsv" ]] || return 1
-    echo "${ref}"
+    CATALOG_REF="${ref}"
     return 0
   fi
   return 1
 }
 
 select_from_catalog() {
-  local catalog_ref
-  catalog_ref="$(pull_catalog "${CATALOG_DIR}")" || { log "Catalog unavailable; skipping list."; return 1; }
+  CATALOG_REF=""
+  pull_catalog "${CATALOG_DIR}" || { log "Catalog unavailable; skipping list."; return 1; }
   local catalog="${CATALOG_DIR}/catalog.tsv"
 
   mapfile -t entries < <(awk -F'\t' 'NR==1 && $1 ~ /channel/ {next} NF>=2 {print NR ":" $0}' "${catalog}")
@@ -348,10 +361,10 @@ select_from_catalog() {
   fi
 
   echo
-  echo "Catalog entries (${catalog_ref}):"
+  echo "Catalog entries (${CATALOG_REF}):"
   local i=1
   for line in "${entries[@]}"; do
-    IFS=$'\t' read -r idx channel tag created version variant target sku gitsha contract k3s imgsha <<<"${line#*:}"
+    IFS=$'\t' read -r channel tag created version variant target sku gitsha contract k3s imgsha <<<"${line#*:}"
     printf "  %d) %-12s %-30s %s %s %s\n" "${i}" "${channel}" "${tag}" "${version}" "${created}" "${contract}"
     i=$((i+1))
   done
@@ -365,7 +378,7 @@ select_from_catalog() {
     return 1
   fi
   local chosen="${entries[$((pick-1))]}"
-  IFS=$'\t' read -r _ channel tag created version variant target sku gitsha contract k3s imgsha <<<"${chosen#*:}"
+  IFS=$'\t' read -r channel tag created version variant target sku gitsha contract k3s imgsha <<<"${chosen#*:}"
   SELECTED_TAG="${tag}"
   SELECTED_REF="${OS_REPO}:${tag}"
   log "Selected ${SELECTED_REF} (channel=${channel}, version=${version}, contract=${contract})"
@@ -454,6 +467,7 @@ main() {
   load_payload_config
   ensure_dirs
   ensure_oras
+  wait_for_network
   maybe_oras_login
   select_payload_ref
   pull_payload "${SELECTED_REF}"
