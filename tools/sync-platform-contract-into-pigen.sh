@@ -6,7 +6,12 @@ REF_FILE="${ROOT}/contracts/platform-contract.ref"
 [[ -f "${REF_FILE}" ]] || { echo "Missing ${REF_FILE}" >&2; exit 1; }
 
 REF="$(cat "${REF_FILE}")"
-DIGEST="${REF#*@}"
+CONTRACT_DIGEST_FILE="${ROOT}/artifacts/platform-contract/extracted/platform-contract/contract.digest"
+if [[ -f "${CONTRACT_DIGEST_FILE}" ]]; then
+  DIGEST="$(cat "${CONTRACT_DIGEST_FILE}")"
+else
+  DIGEST="${REF#*@}"
+fi
 
 SRC="${ROOT}/artifacts/platform-contract/extracted/platform-contract"
 [[ -d "${SRC}" ]] || {

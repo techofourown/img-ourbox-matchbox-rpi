@@ -15,14 +15,18 @@ command -v oras >/dev/null 2>&1 || {
 OUT_BASE="${ROOT}/artifacts/platform-contract"
 PULL_DIR="${OUT_BASE}/pull"
 EXTRACT_DIR="${OUT_BASE}/extracted"
+META_DIR="${OUT_BASE}/meta"
 
-rm -rf "${PULL_DIR}" "${EXTRACT_DIR}"
-mkdir -p "${PULL_DIR}" "${EXTRACT_DIR}"
+rm -rf "${PULL_DIR}" "${EXTRACT_DIR}" "${META_DIR}"
+mkdir -p "${PULL_DIR}" "${EXTRACT_DIR}" "${META_DIR}"
 
 echo "Pulling platform contract:"
 echo "  ${REF}"
 
-oras pull "${REF}" -o "${PULL_DIR}"
+oras pull "${REF}" -o "${PULL_DIR}" | tee "${META_DIR}/oras.pull.log"
+
+# Capture resolved digest for traceability when using a tag (e.g., edge)
+RESOLVED_DIGEST="$(grep -Eo 'sha256:[0-9a-f]{64}' "${META_DIR}/oras.pull.log" | tail -n1 || true)"
 
 TARBALL="${PULL_DIR}/dist/platform-contract.tar.gz"
 if [[ ! -f "${TARBALL}" ]]; then
@@ -37,5 +41,9 @@ tar -xzf "${TARBALL}" -C "${EXTRACT_DIR}"
   echo "Missing platform-contract/contract.env in extracted payload" >&2
   exit 1
 }
+
+if [[ -n "${RESOLVED_DIGEST}" ]]; then
+  printf '%s\n' "${RESOLVED_DIGEST}" > "${EXTRACT_DIR}/platform-contract/contract.digest"
+fi
 
 echo "OK: extracted to ${EXTRACT_DIR}/platform-contract"
