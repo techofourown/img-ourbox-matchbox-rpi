@@ -1,7 +1,5 @@
 # ADR-0003: Distribute OS images as OCI artifacts via a container registry
 
-## Status
-Accepted
 
 ## Context
 

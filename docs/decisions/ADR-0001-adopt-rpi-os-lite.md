@@ -1,7 +1,5 @@
 # ADR-0001: Adopt Raspberry Pi OS Lite as the Base Operating System for OurBox Matchbox
 
-## Status
-Accepted
 
 ## Context
 

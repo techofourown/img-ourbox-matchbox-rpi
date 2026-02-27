@@ -1,7 +1,5 @@
 # ADR-0002: Adopt a label-based data mount contract for OurBox Matchbox
 
-## Status
-Accepted
 
 ## Context
 
