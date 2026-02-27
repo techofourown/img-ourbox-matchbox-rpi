@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.5.0...v0.6.0) (2026-02-27)
+
+
+### Features
+
+* consume platform airgap bundle from sw-ourbox-os ([61312bf](https://github.com/techofourown/img-ourbox-matchbox/commit/61312bf66d0b5724eadc045f3ee71e8030c04fec))
+
 # [0.5.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.4.0...v0.5.0) (2026-02-27)
 
 
