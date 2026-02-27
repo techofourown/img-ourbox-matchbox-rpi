@@ -9,40 +9,18 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../" && pwd)"
 
 AIRGAP="${REPO_ROOT}/artifacts/airgap"
 
-# Pull the exact versions used when creating the airgap artifacts.
-# (This keeps the stage resilient to tar naming changes.)
-if [[ -f "${AIRGAP}/manifest.env" ]]; then
-  # shellcheck disable=SC1090
-  source "${AIRGAP}/manifest.env"
-fi
-
-: "${NGINX_IMAGE:=docker.io/library/nginx:1.27-alpine}"
-: "${DUFS_IMAGE:=docker.io/sigoden/dufs:v0.42.0}"
-: "${FLATNOTES_IMAGE:=docker.io/dullage/flatnotes:v5.0.0}"
-
-NGINX_TAR="$(echo "${NGINX_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
-DUFS_TAR="$(echo "${DUFS_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
-FLATNOTES_TAR="$(echo "${FLATNOTES_IMAGE}" | sed 's|/|_|g; s|:|_|g').tar"
-
 # Refuse to build if the airgap artifacts aren't present
 test -x "${AIRGAP}/k3s/k3s" || { echo "ERROR: missing ${AIRGAP}/k3s/k3s" >&2; exit 1; }
 test -f "${AIRGAP}/k3s/k3s-airgap-images-arm64.tar" || { echo "ERROR: missing ${AIRGAP}/k3s/k3s-airgap-images-arm64.tar" >&2; exit 1; }
-test -f "${AIRGAP}/platform/images/${NGINX_TAR}" || {
-  echo "ERROR: missing ${AIRGAP}/platform/images/${NGINX_TAR}" >&2
-  echo "Found in ${AIRGAP}/platform/images:" >&2
+
+shopt -s nullglob
+platform_tars=("${AIRGAP}/platform/images/"*.tar)
+shopt -u nullglob
+if (( ${#platform_tars[@]} == 0 )); then
+  echo "ERROR: no platform image tars found in ${AIRGAP}/platform/images" >&2
   ls -lah "${AIRGAP}/platform/images" >&2 || true
   exit 1
-}
-test -f "${AIRGAP}/platform/images/${DUFS_TAR}" || {
-  echo "ERROR: missing ${AIRGAP}/platform/images/${DUFS_TAR}" >&2
-  ls -lah "${AIRGAP}/platform/images" >&2 || true
-  exit 1
-}
-test -f "${AIRGAP}/platform/images/${FLATNOTES_TAR}" || {
-  echo "ERROR: missing ${AIRGAP}/platform/images/${FLATNOTES_TAR}" >&2
-  ls -lah "${AIRGAP}/platform/images" >&2 || true
-  exit 1
-}
+fi
 
 echo "==> Installing k3s binary"
 install -D -m 0755 \
@@ -54,29 +32,11 @@ install -D -m 0644 \
   "${AIRGAP}/k3s/k3s-airgap-images-arm64.tar" \
   "${ROOTFS_DIR}/opt/ourbox/airgap/k3s/k3s-airgap-images-arm64.tar"
 
-install -D -m 0644 \
-  "${AIRGAP}/platform/images/${NGINX_TAR}" \
-  "${ROOTFS_DIR}/opt/ourbox/airgap/platform/images/${NGINX_TAR}"
-
-install -D -m 0644 \
-  "${AIRGAP}/platform/images/${DUFS_TAR}" \
-  "${ROOTFS_DIR}/opt/ourbox/airgap/platform/images/${DUFS_TAR}"
-
-install -D -m 0644 \
-  "${AIRGAP}/platform/images/${FLATNOTES_TAR}" \
-  "${ROOTFS_DIR}/opt/ourbox/airgap/platform/images/${FLATNOTES_TAR}"
-
-echo "==> Copying Todo Bloom static files"
-test -d "${AIRGAP}/platform/todo-bloom" || {
-  echo "ERROR: missing ${AIRGAP}/platform/todo-bloom" >&2
-  exit 1
-}
-install -d -m 0755 "${ROOTFS_DIR}/opt/ourbox/airgap/platform/todo-bloom"
-install -m 0644 \
-  "${AIRGAP}/platform/todo-bloom/index.html" \
-  "${AIRGAP}/platform/todo-bloom/app.js" \
-  "${AIRGAP}/platform/todo-bloom/styles.css" \
-  "${ROOTFS_DIR}/opt/ourbox/airgap/platform/todo-bloom/"
+for tar in "${platform_tars[@]}"; do
+  install -D -m 0644 \
+    "${tar}" \
+    "${ROOTFS_DIR}/opt/ourbox/airgap/platform/images/$(basename "${tar}")"
+done
 
 echo "==> Installing platform manifests + systemd units + bootstrap script"
 cp -a "${SCRIPT_DIR}/files/." "${ROOTFS_DIR}/"

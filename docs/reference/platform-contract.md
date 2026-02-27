@@ -1,111 +1,69 @@
 # Platform Contract Consumption (Matchbox)
 
-This document describes how `img-ourbox-matchbox` consumes the OurBox OS **platform contract**
-defined by `sw-ourbox-os`.
-
-It is intentionally **Phase 0 / documentation-first**: it explains today's "vendored baseline"
-reality and the future OCI-by-digest destination.
-
-If this doc disagrees with reality, update this doc or fix the implementation — do not let drift
-persist silently.
+Matchbox is **only a consumer** of platform software. All manifests, static assets, and platform
+images come from `sw-ourbox-os` via pinned OCI artifacts; nothing is authored or fetched ad-hoc in
+this repo.
 
 ---
 
-## Source of truth
+## Sources of truth
 
-The platform contract (baseline manifests + platform components contract) is defined in:
-
-- `sw-ourbox-os` ADR-0009 (platform contract as OCI artifact):
-  https://github.com/techofourown/sw-ourbox-os/blob/main/docs/decisions/ADR-0009-package-the-platform-contract-as-an-oci-artifact.md
-
-- `sw-ourbox-os` integration reference:
-  https://github.com/techofourown/sw-ourbox-os/blob/main/docs/architecture/artifact-distribution-and-integration.md
-
-- Pinned digest in this repo: `contracts/platform-contract.ref` (update this file when bumping)
-
-This repo is a **consumer**.
+- `sw-ourbox-os` ADR-0009 (platform contract as OCI artifact)
+- `sw-ourbox-os` artifact docs: https://github.com/techofourown/sw-ourbox-os/blob/main/docs/architecture/artifact-distribution-and-integration.md
+- Pinned refs in this repo:
+  - `contracts/platform-contract.ref` (arch-agnostic contract)
+  - `contracts/airgap-platform.ref` (arch-specific bundle with k3s + images)
 
 ---
 
-## Current state: consume OCI artifact by pinned digest
+## Current state (OCI by digest)
 
-Matchbox fetches the upstream `platform-contract` OCI artifact pinned by digest from GHCR (see
-`contracts/platform-contract.ref`), extracts it with `./tools/fetch-platform-contract.sh`, and
-syncs it into the pi-gen stage via `./tools/sync-platform-contract-into-pigen.sh`. The airgap
-platform directory at `/opt/ourbox/airgap/platform/` is populated from this artifact during build,
-not from vendored YAML.
+Matchbox pulls two GHCR artifacts published by `sw-ourbox-os`:
+
+1) **platform-contract** (arch-agnostic)
+   - Contents: manifests, landing, todo-bloom assets, contract metadata
+   - Pulled via `./tools/fetch-platform-contract.sh`
+   - Synced into pi-gen via `./tools/sync-platform-contract-into-pigen.sh`
+
+2) **airgap-platform** (arch-specific: arm64/amd64)
+   - Contents: `k3s` binary, `k3s-airgap-images-<arch>.tar`, platform image tars, `manifest.env`
+   - Pulled via `./tools/fetch-airgap-platform.sh` (which also triggers the contract sync)
+   - Injected by pi-gen stage `02-airgap-platform`
+
+Runtime expectation (in the built image):
+- `/opt/ourbox/airgap/k3s/{k3s,k3s-airgap-images-*.tar}`
+- `/opt/ourbox/airgap/platform/images/*.tar`
+- `/opt/ourbox/airgap/platform/manifests/**`
+- `/opt/ourbox/airgap/platform/{landing,todo-bloom}/**`
+- `/opt/ourbox/airgap/platform/contract.env` + `contract.digest`
 
 ---
 
-## Required provenance recording
+## Provenance recording
 
-The installed system records platform contract provenance in `/etc/ourbox/release` after the
-platform contract has been staged into the rootfs. Keys appended include:
-
+During build, `ourbox-release` generation records platform contract provenance in
+`/etc/ourbox/release`:
 - `OURBOX_PLATFORM_CONTRACT_SOURCE`
 - `OURBOX_PLATFORM_CONTRACT_REVISION`
 - `OURBOX_PLATFORM_CONTRACT_VERSION`
 - `OURBOX_PLATFORM_CONTRACT_CREATED`
 - `OURBOX_PLATFORM_CONTRACT_DIGEST`
 
-See also: `docs/reference/contracts.md`.
+---
+
+## Updating pins
+
+1. Publish new `platform-contract` and `airgap-platform` (per arch) from `sw-ourbox-os`.
+2. Update `contracts/platform-contract.ref` and `contracts/airgap-platform.ref` to the new digests.
+3. Run `./tools/fetch-airgap-platform.sh` to pull/sync into `pigen/`.
+4. Rebuild images; update release notes/changelog with the new digests.
 
 ---
 
-## Phase 0 update procedure (vendoring workflow)
+## Relationship to OS image distribution
 
-When you update the embedded baseline manifests:
-
-1. **Choose an upstream `sw-ourbox-os` revision**
-   - Prefer a tagged release when available (e.g., `v0.x.y`)
-   - Otherwise record the exact git SHA
-
-2. **Update the vendored baseline content**
-   - Copy/update the platform baseline manifests and any required airgap assets in the image staging
-     directory (`pigen/stages/stage-ourbox-matchbox/02-airgap-platform/`).
-   - Treat this as "importing a contract snapshot," not "tweaking whatever."
-
-3. **Update `/etc/ourbox/release` generation**
-   - Ensure the build (substage `00-ourbox-contract`) writes:
-     - `OURBOX_PLATFORM_CONTRACT_SOURCE`
-     - `OURBOX_PLATFORM_CONTRACT_REVISION`
-   - If you imported from a release tag, also write:
-     - `OURBOX_PLATFORM_CONTRACT_VERSION`
-
-4. **Document the change**
-   - Add a short CHANGELOG entry stating the upstream contract revision/version you imported.
-
-5. **Keep image references disciplined**
-   - As we move into Phase 1, baseline manifests SHOULD reference app/container images by digest.
-   - Do not introduce "latest" tags in baseline manifests.
-
----
-
-## Future state (Phase 2): consume platform contract as an OCI artifact by digest
-
-Destination model:
-
-- `sw-ourbox-os` publishes a platform contract OCI artifact
-- Image repos consume it by digest:
-  - build-time embed (airgap), OR
-  - first-boot fetch (network-optional, but must support offline export paths)
-
-When OCI packaging exists, `OURBOX_PLATFORM_CONTRACT_DIGEST` becomes the authoritative identity
-marker on device.
-
-This repo should then minimize vendored YAML drift: the image consumes the upstream artifact rather
-than carrying a forked copy forever.
-
----
-
-## Relationship to OS image OCI distribution
-
-This repo may also distribute the flashable OS image (`os.img.xz`) via OCI registry mechanics
-(ADR-0003). That is **transport** for the flashable image bytes.
-
-Platform contract identity and provenance are separate and are defined by:
-- ADR-0004 (this repo)
-- `sw-ourbox-os` ADR-0009 (upstream)
+OCI distribution of the OS image (`os.img.xz`) is transport only (see ADR-0003). Platform contract
+identity is separate and governed by `sw-ourbox-os`.
 
 ---
 

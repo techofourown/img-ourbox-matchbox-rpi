@@ -1,6 +1,6 @@
 # OurBox Matchbox OS — Operator Runbook (Zero → Boot)
 
-**Last verified:** 2026-01-26  
+**Last verified:** 2026-02-27 (re-verify after airgap bundle migration)  
 **Verified on:** Pi 5 + dual NVMe (DATA label `OURBOX_DATA`, SYSTEM flashed to other NVMe)  
 **Outcome:** k3s + hello workload running, nginx reachable on `127.0.0.1:30080`
 
@@ -12,7 +12,8 @@ This is the only step-by-step doc. If reality and this file disagree, update thi
 
 - Container runtime: **Podman (rootful)**
 - Build tooling: **BuildKit installed on host**
-- Versions: **pinned** in `tools/versions.env` (including K3s)
+- Platform pins: **pinned in `sw-ourbox-os`** and consumed via `contracts/airgap-platform.ref` and `contracts/platform-contract.ref`
+- Host tooling pins: **pinned** in `tools/versions.env` (BuildKit/ORAS)
 - Disk safety: **exactly two NVMe disks required**
   - DATA: ext4 filesystem label `OURBOX_DATA` (must never be wiped)
   - SYSTEM: the other NVMe disk (will be wiped)
@@ -58,7 +59,7 @@ Good looks like verification after NVMe boot remains the same as below in **Firs
 ## What you need (any Linux, including the Pi)
 
 - Booted Linux system with sudo access
-- Internet access for first run (downloads k3s + container image)
+- Internet access for first run (pulls OCI artifacts from GHCR)
 - Disk space for build output (recommend at least 60 GB free)
 - Raspberry Pi workflow requirement:
   - you must be booted from SD or USB when flashing (root filesystem must not be NVMe)
@@ -83,8 +84,7 @@ cd img-ourbox-matchbox
 That script will:
 
 * install Podman + BuildKit + required host tools (idempotent)
-* enforce pinned versions from `tools/versions.env` (no “latest”)
-* fetch the airgap artifacts (including the pinned platform contract)
+* pull pinned platform artifacts (`airgap-platform` + `platform-contract`) by OCI ref from `contracts/*.ref`
 * build the OS image
 * scan for NVMe disks and refuse to proceed unless there are exactly two
 * protect the DATA disk (label `OURBOX_DATA`) and pick the other NVMe as SYSTEM

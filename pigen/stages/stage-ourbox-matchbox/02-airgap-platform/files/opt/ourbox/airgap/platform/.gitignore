@@ -1,6 +1,7 @@
 # Generated from the pinned platform contract
 landing/*
 manifests/*
+todo-bloom/*
 contract.env
 contract.digest
 
@@ -8,3 +9,4 @@ contract.digest
 !README.md
 !landing/.gitkeep
 !manifests/.gitkeep
+!todo-bloom/.gitkeep

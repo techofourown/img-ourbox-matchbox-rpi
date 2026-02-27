@@ -7,8 +7,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT}/tools/lib.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/tools/registry.sh"
-# shellcheck disable=SC1091
-[ -f "${ROOT}/tools/versions.env" ] && source "${ROOT}/tools/versions.env"
 
 need_cmd lsblk
 need_cmd readlink
@@ -497,13 +495,14 @@ main() {
   export DOCKER="${DOCKER:-$(pick_container_cli)}"
   log "Using container CLI: ${DOCKER}"
 
-  # Enforce pinned versions
-  [[ -n "${K3S_VERSION:-}" ]] || die "K3S_VERSION not set; check tools/versions.env"
-  [[ -n "${NGINX_IMAGE:-}" ]] || die "NGINX_IMAGE not set; check tools/versions.env"
-  log "Pinned versions: K3S_VERSION=${K3S_VERSION} NGINX_IMAGE=${NGINX_IMAGE}"
-
   log "Fetching airgap artifacts"
   "${ROOT}/tools/fetch-airgap-platform.sh"
+
+  if [[ -f "${ROOT}/artifacts/airgap/manifest.env" ]]; then
+    # shellcheck disable=SC1090
+    source "${ROOT}/artifacts/airgap/manifest.env"
+    log "Airgap pins: ARCH=${AIRGAP_PLATFORM_ARCH:-?} K3S_VERSION=${K3S_VERSION:-?}"
+  fi
 
   log "Running build-host loop preflight"
   "${ROOT}/tools/preflight-build-host.sh"

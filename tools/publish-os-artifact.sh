@@ -56,11 +56,12 @@ if [[ -f "${CONTRACT_ENV_FILE}" ]]; then
   source "${CONTRACT_ENV_FILE}"
 fi
 
-if [[ -f "${ROOT}/tools/versions.env" ]]; then
+AIRGAP_MANIFEST="${ROOT}/artifacts/airgap/manifest.env"
+if [[ -f "${AIRGAP_MANIFEST}" ]]; then
   # shellcheck disable=SC1090
-  source "${ROOT}/tools/versions.env"
+  source "${AIRGAP_MANIFEST}"
 fi
-K3S_VERSION="${K3S_VERSION:-}"
+K3S_VERSION="${K3S_VERSION:-unknown}"
 
 GIT_SHA="$(git -C "${ROOT}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
 BUILD_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

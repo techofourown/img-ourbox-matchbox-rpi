@@ -16,7 +16,7 @@ sudo ./tools/ops-e2e.sh
 ### Individual steps (what ops-e2e.sh calls in order)
 ```bash
 sudo ./tools/bootstrap-host.sh         # Install Podman, BuildKit, system deps (idempotent)
-./tools/fetch-airgap-platform.sh       # Download k3s binary, airgap images, nginx
+./tools/fetch-airgap-platform.sh       # Pull pinned airgap bundle (k3s + platform images) via ORAS
 sudo ./tools/build-image.sh            # Run pi-gen, collect artifact into deploy/
 sudo ./tools/flash-system-nvme.sh      # Wipe + flash SYSTEM NVMe disk
 sudo ./tools/preboot-userconf.sh       # Write first-boot username/password
@@ -40,7 +40,7 @@ There is no formal test suite. Verification is manual: build, flash, boot, inspe
 
 ### Build Pipeline (ops-e2e.sh)
 1. **Bootstrap host** — install Podman + BuildKit + deps
-2. **Fetch airgap artifacts** — k3s binary, k3s airgap images, nginx demo image → `artifacts/airgap/`
+2. **Fetch airgap artifacts** — pull pinned `airgap-platform` OCI artifact (k3s binary, k3s airgap images, platform images, manifest.env) + pinned `platform-contract` → `artifacts/airgap/`, `artifacts/platform-contract/`
 3. **Build OS image** — pi-gen runs stages 0–2 (upstream) + `stage-ourbox-matchbox` (custom) → `deploy/*.img.xz`
 4. **Flash SYSTEM disk** — wipe + dd to the non-DATA NVMe (exactly 2 NVMe disks required)
 5. **Write userconf** — first-boot credentials to boot partition
@@ -55,7 +55,7 @@ Each substage runs inside the pi-gen chroot:
 ### Shared Shell Libraries
 - `tools/lib.sh` — `log()`, `die()`, `need_cmd()`, `resolve_label()`, `cli_base()`
 - `tools/registry.sh` — `pick_container_cli()`, `imgref()`, `mirror_image()`, `canonicalize_image_ref()`, `ensure_buildkitd()`
-- `tools/versions.env` — pinned K3S_VERSION, BUILDKIT_VERSION, NGINX_IMAGE
+- `tools/versions.env` — host tool pins (BuildKit/ORAS). Platform pins live in `sw-ourbox-os` and are consumed via OCI.
 - `tools/registry.env` — registry address and namespace (override via `registry.env.local`)
 
 ### Storage Contract
