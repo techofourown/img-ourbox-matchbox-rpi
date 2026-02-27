@@ -431,11 +431,8 @@ pull_payload() {
   PAYLOAD_META="${PAYLOAD_DIR}/os.meta.env"
 
   local sha_file="${PAYLOAD_DIR}/os.img.xz.sha256"
-  if [[ -f "${sha_file}" ]]; then
-    PAYLOAD_SHA256="$(parse_sha256_file "${sha_file}")"
-  else
-    PAYLOAD_SHA256=""
-  fi
+  [[ -f "${sha_file}" ]] || die "payload missing os.img.xz.sha256"
+  PAYLOAD_SHA256="$(parse_sha256_file "${sha_file}")"
 
   local actual_sha
   actual_sha="$(sha256sum "${PAYLOAD_PATH}" | awk '{print $1}')"
