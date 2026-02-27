@@ -1,3 +1,18 @@
+# [0.5.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.4.0...v0.5.0) (2026-02-27)
+
+
+### Bug Fixes
+
+* ensure installer deps and docs match runtime ([2b9621c](https://github.com/techofourown/img-ourbox-matchbox/commit/2b9621c46916d620b977d07c8c01f51cae2feace))
+* harden installer network and catalog fetch ([4f7dc59](https://github.com/techofourown/img-ourbox-matchbox/commit/4f7dc5989d65c53c6bcd29aa09d1057912fc8a09))
+* require payload checksum in installer ([6cd579f](https://github.com/techofourown/img-ourbox-matchbox/commit/6cd579f97b15049d11dd05b21b2a2d1e61e2f64c))
+* tighten installer integrity and catalog handling ([4e57f4b](https://github.com/techofourown/img-ourbox-matchbox/commit/4e57f4b0062469a24256a12928495400e05f527f))
+
+
+### Features
+
+* pull installer payloads from OCI artifacts ([392dfa3](https://github.com/techofourown/img-ourbox-matchbox/commit/392dfa3fbc9a46269db04f4562243ff57e4bf821))
+
 # [0.4.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.3.6...v0.4.0) (2026-02-15)
 
 
