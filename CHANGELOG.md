@@ -1,3 +1,11 @@
+# [0.8.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.7.0...v0.8.0) (2026-02-28)
+
+
+### Features
+
+* default installer media acquisition to published registry artifact ([8ee591e](https://github.com/techofourown/img-ourbox-matchbox/commit/8ee591efac5d51d1fedaa510477505d98831ff47))
+* policy-compliant official build and publish pipeline ([9df1c2e](https://github.com/techofourown/img-ourbox-matchbox/commit/9df1c2e31e77519bb58f4e8f9cd5a8e63d1b8edd))
+
 # [0.7.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.6.0...v0.7.0) (2026-02-28)
 
 
