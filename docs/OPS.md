@@ -42,8 +42,14 @@ Desktop command:
 ./tools/prepare-installer-media.sh
 ```
 
-The script is interactive and will list removable/USB disks, show mount state,
-and require you to choose a target disk during the session.
+The script is interactive and defaults to pulling a published installer artifact
+from registry, verifying checksum, then flashing selected removable/USB media.
+
+For local source builds (maintainer/debug path), use:
+
+```bash
+./tools/prepare-installer-media.sh --build-local
+```
 
 Pi boot steps:
 
@@ -164,7 +170,8 @@ signatures.
 ## OCI distribution of the OS image (transport + installer input)
 
 OS payloads are published as ORAS artifacts (non-runnable) with files:
-`os.img.xz`, `os.img.xz.sha256`, `os.meta.env`, optional `os.info`/`build.log`.
+`os.img.xz`, `os.img.xz.sha256`, `os.meta.env`, optional `os.info`.
+`build.log` is not published unless `OS_INCLUDE_BUILD_LOG=1` is set.
 
 Channel tags (moving): `${OURBOX_TARGET}-stable` by default, plus any you set in
 `OS_CHANNEL_TAGS`. Immutable tag defaults to the build basename.
@@ -207,6 +214,40 @@ OS_CATALOG_ENABLED=1
 ```
 
 During install you can press `l` to list catalog entries or `r` to paste a custom ref.
+
+---
+
+## OCI distribution of installer media (transport + operator flash input)
+
+Installer media artifacts are published as ORAS artifacts (non-runnable) with files:
+`installer.img.xz`, `installer.img.xz.sha256`, `installer.meta.env`, optional `installer.info`.
+`build-installer.log` is not published unless `INSTALLER_INCLUDE_BUILD_LOG=1` is set.
+
+Channel tags (moving): `${OURBOX_TARGET}-installer-stable` by default, plus any you set in
+`INSTALLER_CHANNEL_TAGS`. Immutable tag defaults to the build basename.
+
+Publish:
+
+```bash
+# Push latest built installer artifact from deploy/ to INSTALLER_REPO
+# (default ghcr.io/techofourown/ourbox-matchbox-installer)
+./tools/publish-installer-artifact.sh deploy
+```
+
+This writes:
+- `deploy/installer-artifact.ref` (immutable tag ref)
+- `deploy/installer-artifact.pinned.ref` (digest-pinned immutable ref)
+- `deploy/installer-artifact.digest` (artifact digest only)
+
+Pull/verify:
+
+```bash
+rm -rf ./deploy-installer-from-registry
+./tools/pull-installer-artifact.sh --channel stable --outdir ./deploy-installer-from-registry
+xz -t ./deploy-installer-from-registry/installer.img.xz
+```
+
+`./tools/prepare-installer-media.sh` uses this pull path by default.
 
 ---
 
