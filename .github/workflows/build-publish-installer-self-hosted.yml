@@ -1,0 +1,62 @@
+name: Smoke Build — Installer (Self-hosted, non-publishing)
+# Manual build-only workflow for on-demand verification that an installer build
+# succeeds on the real hardware builder. Does NOT publish to GHCR.
+# Official publication is done by official-nightly.yml and official-release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Build target (for example rpi)"
+        required: true
+        default: "rpi"
+        type: string
+      variant:
+        description: "Variant label (for example prod/dev)"
+        required: true
+        default: "prod"
+        type: string
+      version:
+        description: "Version label embedded in metadata"
+        required: true
+        default: "dev"
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: smoke-build-installer-${{ inputs.target }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  smoke-build:
+    runs-on: [self-hosted, ourbox-builder, matchbox-build]
+    timeout-minutes: 240
+    env:
+      OURBOX_TARGET: ${{ inputs.target }}
+      OURBOX_VARIANT: ${{ inputs.variant }}
+      OURBOX_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Bootstrap host dependencies
+        run: sudo ./tools/bootstrap-host.sh
+
+      - name: Build installer image
+        run: sudo ./tools/build-installer-image.sh
+
+      - name: Upload build outputs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-installer-build-${{ github.run_id }}
+          path: |
+            deploy/*installer-ourbox-matchbox-*.info
+            deploy/build-installer.log
+          if-no-files-found: warn

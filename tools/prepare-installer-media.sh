@@ -7,23 +7,65 @@ source "${ROOT}/tools/lib.sh"
 
 usage() {
   cat <<EOF
-Usage: $0
+Usage: $0 [--build-local] [--installer-ref REF] [--installer-channel CHANNEL] [--installer-outdir DIR]
 
 Always interactive:
 - lists removable/USB disks
 - shows mount/label context
 - requires operator selection in-session before flashing
+
+Default mode (recommended):
+- bootstraps host tools
+- pulls official installer artifact from registry
+- flashes selected media
+
+Local source-build mode (--build-local):
+- bootstraps host tools
+- fetches airgap platform bundle
+- builds OS + installer artifacts locally
+- flashes selected media
 EOF
 }
 
-if [[ $# -eq 1 && ( "${1}" == "-h" || "${1}" == "--help" ) ]]; then
-  usage
-  exit 0
-fi
+BUILD_LOCAL=0
+INSTALLER_REF=""
+INSTALLER_CHANNEL="${INSTALLER_CHANNEL:-stable}"
+INSTALLER_OUTDIR=""
 
-if [[ $# -ne 0 ]]; then
-  usage
-  die "no positional target argument is supported; run interactively"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --build-local)
+      BUILD_LOCAL=1
+      shift
+      ;;
+    --installer-ref)
+      [[ $# -ge 2 ]] || die "--installer-ref requires a value"
+      INSTALLER_REF="$2"
+      shift 2
+      ;;
+    --installer-channel)
+      [[ $# -ge 2 ]] || die "--installer-channel requires a value"
+      INSTALLER_CHANNEL="$2"
+      shift 2
+      ;;
+    --installer-outdir)
+      [[ $# -ge 2 ]] || die "--installer-outdir requires a value"
+      INSTALLER_OUTDIR="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      die "unknown argument: $1"
+      ;;
+  esac
+done
+
+if [[ "${BUILD_LOCAL}" == "1" && -n "${INSTALLER_REF}" ]]; then
+  die "--installer-ref cannot be combined with --build-local"
 fi
 
 need_cmd lsblk
@@ -187,23 +229,41 @@ validate_target_dev_or_die "${TARGET_DEV}"
 log "Using target media device: ${TARGET_DEV}"
 
 "${ROOT}/tools/bootstrap-host.sh"
-"${ROOT}/tools/fetch-airgap-platform.sh"
 
 : "${OURBOX_TARGET:=rpi}"
 : "${OURBOX_VARIANT:=dev}"
 : "${OURBOX_VERSION:=dev}"
-OURBOX_TARGET="${OURBOX_TARGET}" OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-image.sh"
 
-OURBOX_TARGET="${OURBOX_TARGET}" OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-installer-image.sh"
-
-installer_img="$(ls -1t "${ROOT}"/deploy/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
+installer_img=""
+if [[ "${BUILD_LOCAL}" == "1" ]]; then
+  log "Mode: local source build for OS + installer artifacts."
+  "${ROOT}/tools/fetch-airgap-platform.sh"
+  OURBOX_TARGET="${OURBOX_TARGET}" OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-image.sh"
+  OURBOX_TARGET="${OURBOX_TARGET}" OURBOX_VARIANT="${OURBOX_VARIANT}" OURBOX_VERSION="${OURBOX_VERSION}" "${ROOT}/tools/build-installer-image.sh"
+  installer_img="$(ls -1t "${ROOT}"/deploy/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz 2>/dev/null | head -n 1 || true)"
+else
+  : "${INSTALLER_OUTDIR:=${ROOT}/deploy-installer-from-registry}"
+  log "Mode: pull published installer artifact from registry."
+  pull_args=(--outdir "${INSTALLER_OUTDIR}")
+  if [[ -n "${INSTALLER_REF}" ]]; then
+    pull_args+=(--ref "${INSTALLER_REF}")
+  else
+    pull_args+=(--channel "${INSTALLER_CHANNEL}")
+  fi
+  OURBOX_TARGET="${OURBOX_TARGET}" "${ROOT}/tools/pull-installer-artifact.sh" "${pull_args[@]}"
+  installer_img="${INSTALLER_OUTDIR}/installer.img.xz"
+fi
 
 if [[ -z "${installer_img}" || ! -f "${installer_img}" ]]; then
-  log "ERROR: no installer image found in deploy/"
-  log "Searched: ${ROOT}/deploy/*installer-ourbox-matchbox-${OURBOX_TARGET,,}-*.img.xz"
+  log "ERROR: installer image not found."
+  log "Expected: ${installer_img:-<none>}"
+  if [[ -n "${INSTALLER_OUTDIR}" ]]; then
+    log "Installer output dir contents:"
+    ls -lah "${INSTALLER_OUTDIR}" || true
+  fi
   log "Deploy dir contents:"
   ls -lah "${ROOT}/deploy" || true
-  die "no installer image found in deploy/"
+  die "no installer image available to flash"
 fi
 
 "${ROOT}/tools/flash-installer-media.sh" "${installer_img}" "${TARGET_DEV}"
