@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.6.0...v0.7.0) (2026-02-28)
+
+
+### Features
+
+* consume install-defaults and emit pinned OS refs ([704aa2c](https://github.com/techofourown/img-ourbox-matchbox/commit/704aa2c6555e2957fd2da5c2ca7844db5d45e92e))
+
 # [0.6.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.5.0...v0.6.0) (2026-02-27)
 
 
