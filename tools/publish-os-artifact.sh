@@ -174,9 +174,9 @@ update_catalog() {
   echo -e "${channel}\t${immutable_tag}\t${BUILD_TS}\t${OURBOX_VERSION}\t${OURBOX_VARIANT}\t${OURBOX_TARGET}\t${OURBOX_SKU}\t${GIT_SHA}\t${CONTRACT_DIGEST}\t${K3S_VERSION}\t${SHA256}\t${immutable_digest}\t${pinned_ref}" >> "${catalog_file}"
 
   log ">> Updating catalog: ${catalog_ref}"
-  oras push "${catalog_ref}" \
+  (cd "${catalog_tmp}" && oras push "${catalog_ref}" \
     --artifact-type "application/vnd.techofourown.ourbox.matchbox.os-catalog.v1" \
-    "${catalog_file}:text/tab-separated-values"
+    "catalog.tsv:text/tab-separated-values")
 }
 
 # Push immutable tag first
