@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 240
 
     steps:
+      - name: Fix workspace ownership from previous build
+        run: sudo chown -R "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}" 2>/dev/null || true
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
