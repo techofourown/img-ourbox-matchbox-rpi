@@ -1,3 +1,10 @@
+## [0.8.5](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.4...v0.8.5) (2026-03-01)
+
+
+### Bug Fixes
+
+* reclaim deploy/ ownership before publish steps ([4130c11](https://github.com/techofourown/img-ourbox-matchbox/commit/4130c11e064f16f286bd7a7dca124cd3193ce9c6))
+
 ## [0.8.4](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.3...v0.8.4) (2026-03-01)
 
 
