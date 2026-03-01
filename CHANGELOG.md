@@ -1,3 +1,10 @@
+## [0.8.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.1...v0.8.2) (2026-03-01)
+
+
+### Bug Fixes
+
+* use relative paths for oras push file arguments ([e7c7a75](https://github.com/techofourown/img-ourbox-matchbox/commit/e7c7a7540ce8adb70541301f48cd59a2bac170a1))
+
 ## [0.8.1](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.0...v0.8.1) (2026-02-28)
 
 
