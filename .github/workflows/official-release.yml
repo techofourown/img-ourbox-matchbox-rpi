@@ -50,6 +50,9 @@ jobs:
           OURBOX_VARIANT: prod
           OURBOX_VERSION: ${{ github.ref_name }}
 
+      - name: Reclaim build output ownership
+        run: sudo chown -R "$(id -u):$(id -g)" deploy/
+
       - name: Publish OS artifact (official release)
         run: ./tools/publish-os-artifact-official.sh release
 
