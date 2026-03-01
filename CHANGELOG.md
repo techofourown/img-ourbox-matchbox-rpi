@@ -1,3 +1,10 @@
+## [0.8.4](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.3...v0.8.4) (2026-03-01)
+
+
+### Bug Fixes
+
+* login to GHCR before fetching upstream inputs ([438d2c8](https://github.com/techofourown/img-ourbox-matchbox/commit/438d2c8e20240534edad6627483b5236e83e536a))
+
 ## [0.8.3](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.2...v0.8.3) (2026-03-01)
 
 
