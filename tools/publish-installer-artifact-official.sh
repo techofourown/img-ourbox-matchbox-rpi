@@ -20,10 +20,10 @@ case "${RELEASE_CONTEXT}" in
     INSTALLER_IMMUTABLE_TAG="nightly-${GITHUB_SHA:0:12}-${OURBOX_TARGET}-installer"
     ;;
   release)
-    [[ -n "${GITHUB_REF_NAME:-}" ]] || die "GITHUB_REF_NAME not set"
-    OURBOX_VERSION="${GITHUB_REF_NAME}"
+    OURBOX_VERSION="${RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
+    [[ -n "${OURBOX_VERSION}" ]] || die "release tag not set (RELEASE_TAG and GITHUB_REF_NAME are both empty)"
     INSTALLER_CHANNEL_TAGS="${OFFICIAL_INSTALLER_RELEASE_CHANNELS}"
-    INSTALLER_IMMUTABLE_TAG="${GITHUB_REF_NAME}-${OURBOX_TARGET}-installer"
+    INSTALLER_IMMUTABLE_TAG="${OURBOX_VERSION}-${OURBOX_TARGET}-installer"
     ;;
   *)
     die "Unknown release context: ${RELEASE_CONTEXT} (expected: nightly|release)"
