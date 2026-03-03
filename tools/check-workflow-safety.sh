@@ -107,12 +107,13 @@ while IFS= read -r wf; do
     continue
   fi
 
-  # The types: list must contain "published" (and only safe types).
-  if grep -A3 '^\s\+release:' "${wf}" 2>/dev/null | grep -qE '\bpublished\b' || \
-     grep -qE 'types:.*\[published\]' "${wf}"; then
+  # types: must be exactly [published] — no other event types permitted.
+  # Matches the inline form: types: [published]
+  # Does NOT match: types: [published, deleted], types: [created, published], etc.
+  if grep -qE '^\s+types:\s*\[\s*published\s*\]\s*$' "${wf}"; then
     PASS=$((PASS + 1))
   else
-    fail "${name}: official publish workflow uses release: trigger without types: [published] constraint"
+    fail "${name}: official publish workflow with release: trigger must use exactly types: [published] — no other event types permitted"
   fi
 done < <(find "${WORKFLOW_DIR}" -maxdepth 1 -name '*.yml' -o -name '*.yaml')
 
