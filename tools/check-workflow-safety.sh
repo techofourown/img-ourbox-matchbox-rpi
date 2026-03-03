@@ -5,9 +5,11 @@
 #   1. No workflow that runs on a self-hosted runner may be triggered by
 #      pull_request or pull_request_target (untrusted code on privileged builder).
 #   2. No official publish workflow may expose a broad workflow_dispatch trigger
-#      (official publication must only flow from push-to-main or tag push).
+#      (official publication must only flow from push-to-main or release event).
 #   3. Official publish workflows triggered by branch push must declare a path
 #      filter (paths-ignore or paths) to avoid rebuilding on docs-only changes.
+#   4. Official publish workflows using a release: trigger must constrain to
+#      types: [published] (not draft, not created, not deleted).
 #
 # Run in CI on every PR and push to main.
 set -euo pipefail
@@ -59,7 +61,7 @@ while IFS= read -r wf; do
   fi
 
   if grep -qE '^  workflow_dispatch:' "${wf}"; then
-    fail "${name}: official publish workflow exposes workflow_dispatch — official publication must only trigger from push-to-main or tag push"
+    fail "${name}: official publish workflow exposes workflow_dispatch — official publication must only trigger from push-to-main or release event"
   else
     PASS=$((PASS + 1))
   fi
@@ -86,6 +88,32 @@ while IFS= read -r wf; do
     PASS=$((PASS + 1))
   else
     fail "${name}: official publish workflow triggers on branch push without a path filter — add paths-ignore to skip documentation-only changes"
+  fi
+done < <(find "${WORKFLOW_DIR}" -maxdepth 1 -name '*.yml' -o -name '*.yaml')
+
+# ---------------------------------------------------------------------------
+# Rule 4: official publish workflows using release: must constrain to types: [published]
+# ---------------------------------------------------------------------------
+while IFS= read -r wf; do
+  name="$(basename "${wf}")"
+
+  # Is this an official publish workflow?
+  if ! grep -qE 'publish-(os|installer)-artifact-official\.sh' "${wf}"; then
+    continue
+  fi
+
+  # Does it have a release: trigger?
+  if ! grep -qE '^\s+release:' "${wf}"; then
+    continue
+  fi
+
+  # types: must be exactly [published] — no other event types permitted.
+  # Matches the inline form: types: [published]
+  # Does NOT match: types: [published, deleted], types: [created, published], etc.
+  if grep -qE '^\s+types:\s*\[\s*published\s*\]\s*$' "${wf}"; then
+    PASS=$((PASS + 1))
+  else
+    fail "${name}: official publish workflow with release: trigger must use exactly types: [published] — no other event types permitted"
   fi
 done < <(find "${WORKFLOW_DIR}" -maxdepth 1 -name '*.yml' -o -name '*.yaml')
 

@@ -1,19 +1,20 @@
 name: Official Release Build & Publish (Matchbox)
 
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: official-release-matchbox-${{ github.ref_name }}
+  group: official-release-matchbox-${{ github.event.release.tag_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   build-publish:
+    if: startsWith(github.event.release.tag_name, 'v') && !github.event.release.draft
     runs-on: [self-hosted, official-heavy, pi-image]
     timeout-minutes: 240
 
@@ -21,11 +22,16 @@ jobs:
       - name: Fix workspace ownership from previous build
         run: sudo chown -R "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}" 2>/dev/null || true
 
-      - name: Checkout
+      - name: Checkout release tag
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          ref: refs/tags/${{ github.event.release.tag_name }}
           fetch-depth: 0
+          fetch-tags: true
+          submodules: recursive
+
+      - name: Set release version
+        run: echo "OURBOX_VERSION=${{ github.event.release.tag_name }}" >> "${GITHUB_ENV}"
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -41,29 +47,31 @@ jobs:
         env:
           OURBOX_TARGET: rpi
           OURBOX_VARIANT: prod
-          OURBOX_VERSION: ${{ github.ref_name }}
 
       - name: Build installer image
         run: sudo ./tools/build-installer-image.sh
         env:
           OURBOX_TARGET: rpi
           OURBOX_VARIANT: prod
-          OURBOX_VERSION: ${{ github.ref_name }}
 
       - name: Reclaim build output ownership
         run: sudo chown -R "$(id -u):$(id -g)" deploy/
 
       - name: Publish OS artifact (official release)
         run: ./tools/publish-os-artifact-official.sh release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
 
       - name: Publish installer artifact (official release)
         run: ./tools/publish-installer-artifact-official.sh release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
 
       - name: Upload provenance outputs
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: provenance-release-${{ github.ref_name }}
+          name: provenance-release-${{ github.event.release.tag_name }}
           path: |
             deploy/os-artifact.ref
             deploy/os-artifact.pinned.ref
