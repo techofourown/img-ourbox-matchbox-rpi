@@ -1,3 +1,10 @@
+## [0.8.8](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.7...v0.8.8) (2026-03-03)
+
+
+### Bug Fixes
+
+* correct xargs split exit code in sanitization scan ([0a6b976](https://github.com/techofourown/img-ourbox-matchbox/commit/0a6b976f33b2b5f8b4b29874873a5e953ede2af4))
+
 ## [0.8.7](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.6...v0.8.7) (2026-03-03)
 
 
