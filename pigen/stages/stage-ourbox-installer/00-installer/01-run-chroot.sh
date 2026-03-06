@@ -72,11 +72,19 @@ fi
 mkdir -p /etc/ssh/sshd_config.d
 {
   if [[ "${OURBOX_INSTALLER_SSH_ALLOW_ROOT}" == "1" ]]; then
-    echo "PermitRootLogin yes"
+    if [[ "${OURBOX_INSTALLER_SSH_MODE}" == "password" || "${OURBOX_INSTALLER_SSH_MODE}" == "both" ]]; then
+      echo "PermitRootLogin prohibit-password"
+    else
+      echo "PermitRootLogin yes"
+    fi
   else
     echo "PermitRootLogin no"
   fi
-  echo "PasswordAuthentication no"
+  if [[ "${OURBOX_INSTALLER_SSH_MODE}" == "password" || "${OURBOX_INSTALLER_SSH_MODE}" == "both" ]]; then
+    echo "PasswordAuthentication yes"
+  else
+    echo "PasswordAuthentication no"
+  fi
   echo "PubkeyAuthentication yes"
   echo "KbdInteractiveAuthentication no"
   echo "X11Forwarding no"
@@ -94,15 +102,13 @@ mkdir -p /etc/ssh/sshd_config.d
       echo "AllowUsers ${OURBOX_INSTALLER_SSH_USER}"
     fi
   fi
-  if [[ "${OURBOX_INSTALLER_SSH_MODE}" == "password" || "${OURBOX_INSTALLER_SSH_MODE}" == "both" ]]; then
-    echo
-    echo "Match User ${OURBOX_INSTALLER_SSH_USER}"
-    echo "  PasswordAuthentication yes"
-  fi
 } > /etc/ssh/sshd_config.d/60-ourbox-installer.conf
 
 chmod 0755 /opt/ourbox/tools/ourbox-install
 chmod 0644 /opt/ourbox/tools/lib.sh
+
+install -d -m 0755 /run/sshd
+sshd -t >/dev/null
 
 systemctl enable ssh
 systemctl enable ourbox-installer.service
