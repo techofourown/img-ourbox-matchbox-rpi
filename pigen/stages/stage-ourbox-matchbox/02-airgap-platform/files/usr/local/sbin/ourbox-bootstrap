@@ -13,6 +13,7 @@ HOSTNAME="$(hostname)"
 PLATFORM_CONTRACT_DIR="/opt/ourbox/airgap/platform"
 RENDER_DIR="/run/ourbox-platform-rendered"
 DESIRED_CONTRACT_STATE=""
+PLATFORM_PROFILE_INPUT="${OURBOX_PLATFORM_PROFILE:-demo-apps}"
 
 cleanup() {
   if [[ -n "${DESIRED_CONTRACT_STATE}" && -f "${DESIRED_CONTRACT_STATE}" ]]; then
@@ -30,7 +31,7 @@ resolve_desired_contract_state() {
   DESIRED_CONTRACT_STATE="$(mktemp "${TMPDIR:-/tmp}/ourbox-platform-state.XXXXXX")"
   "${PLATFORM_CONTRACT_DIR}/tools/contract-identity.sh" \
     --contract-dir "${PLATFORM_CONTRACT_DIR}" \
-    --profile "${OURBOX_PLATFORM_PROFILE:-demo-apps}" \
+    --profile "${PLATFORM_PROFILE_INPUT}" \
     --box-host "${OURBOX_BOX_HOST:-${HOSTNAME}.local}" \
     --tls-mode "${OURBOX_TLS_MODE:-}" \
     --ingress-class "${OURBOX_INGRESS_CLASS:-}" \
@@ -184,7 +185,7 @@ rm -rf "${RENDER_DIR}"
 python3 "${PLATFORM_CONTRACT_DIR}/tools/render-contract.py" \
   --contract-root "${PLATFORM_CONTRACT_DIR}" \
   --output-dir "${RENDER_DIR}" \
-  --profile "${OURBOX_PLATFORM_PROFILE}" \
+  --profile "${PLATFORM_PROFILE_INPUT}" \
   --box-host "${BOX_HOST}" \
   --tls-mode "${TLS_MODE}" \
   --ingress-class "${INGRESS_CLASS}" \
