@@ -1,3 +1,16 @@
+# [0.9.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.8...v0.9.0) (2026-03-06)
+
+
+### Bug Fixes
+
+* **installer-ssh:** align runtime contract and teardown ([2ac2cdd](https://github.com/techofourown/img-ourbox-matchbox/commit/2ac2cdda65e79575b768747b308e229913feb8a2))
+* **installer-ssh:** use passwd home for installer key paths ([8967d9f](https://github.com/techofourown/img-ourbox-matchbox/commit/8967d9fca69565c142c3b86b765dff957cc8fcde))
+
+
+### Features
+
+* **installer:** standardize matchbox SSH diagnostics contract ([77afff2](https://github.com/techofourown/img-ourbox-matchbox/commit/77afff283a0595cf922ee9c04c189cc226d01a1b))
+
 ## [0.8.8](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.7...v0.8.8) (2026-03-03)
 
 
