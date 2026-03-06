@@ -60,6 +60,7 @@ SELECTED_TAG=""
 PAYLOAD_PATH=""
 PAYLOAD_SHA256=""
 PAYLOAD_META=""
+OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE="0"
 
 cleanup_mounts() {
   if mountpoint -q "${DATA_CHECK_MP}"; then
@@ -242,6 +243,17 @@ normalize_payload_config() {
   CHANNEL_BETA_TAG="${CHANNEL_BETA_TAG:-${OS_TARGET}-beta}"
   CHANNEL_NIGHTLY_TAG="${CHANNEL_NIGHTLY_TAG:-${OS_TARGET}-nightly}"
   CHANNEL_EXP_LABS_TAG="${CHANNEL_EXP_LABS_TAG:-${OS_TARGET}-exp-labs}"
+  OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE="${OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE:-0}"
+}
+
+teardown_installer_ssh() {
+  [[ "${OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE}" == "1" ]] || {
+    log "Installer SSH teardown disabled."
+    return 0
+  }
+
+  systemctl stop ssh >/dev/null 2>&1 || true
+  log "Installer SSH service stopped for this session."
 }
 
 load_payload_config() {
@@ -744,6 +756,8 @@ main() {
   sync
   umount "${SYS_BOOT_MP}"
   log "userconf written"
+
+  teardown_installer_ssh
 
   echo
   echo "Remove installer media"
