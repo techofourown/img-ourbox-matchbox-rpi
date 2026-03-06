@@ -1,3 +1,11 @@
+## [0.9.1](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.9.0...v0.9.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* **bootstrap:** keep the resolved profile stable during render ([41cad8f](https://github.com/techofourown/img-ourbox-matchbox/commit/41cad8f43ecc6565e2dfc8671b972f8bac5bb25f))
+* **bootstrap:** render and reapply the upstream contract when it changes ([3e7efe4](https://github.com/techofourown/img-ourbox-matchbox/commit/3e7efe4df05d41a15ce3d3ea7b12ff3be8b3a655))
+
 # [0.9.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.8.8...v0.9.0) (2026-03-06)
 
 
