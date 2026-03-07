@@ -111,7 +111,9 @@ mkdir -p /etc/ssh/sshd_config.d
 } > /etc/ssh/sshd_config.d/60-ourbox-installer.conf
 
 : "${OS_REPO:=ghcr.io/techofourown/ourbox-matchbox-os}"
-: "${INSTALL_DEFAULTS_REF:=ghcr.io/techofourown/sw-ourbox-os/install-defaults:stable}"
+if [[ -z "${INSTALL_DEFAULTS_REF+x}" ]]; then
+  INSTALL_DEFAULTS_REF="ghcr.io/techofourown/sw-ourbox-os/install-defaults:stable"
+fi
 : "${INSTALLER_ID:=matchbox}"
 : "${OS_TARGET:=rpi}"
 : "${OS_CHANNEL:=stable}"

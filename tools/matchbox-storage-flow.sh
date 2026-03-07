@@ -109,7 +109,7 @@ matchbox_label_part_on_disk() {
 
   while read -r part; do
     [[ -n "${part}" ]] || continue
-    part_label="$(blkid -o value -s LABEL "${part}" 2>/dev/null || true)"
+    part_label="$(matchbox_storage_cmd blkid -o value -s LABEL "${part}" 2>/dev/null || true)"
     if [[ "${part_label}" == "${label}" ]]; then
       readlink -f "${part}"
       return 0
