@@ -24,6 +24,7 @@ We will standardize on:
 - DATA filesystem: **ext4**
 - DATA identity: filesystem **LABEL = `OURBOX_DATA`**
 - Mount point: `/var/lib/ourbox`
+- Installer and recovery flows may assign either physical NVMe as DATA; prior disk roles must not become sticky once an operator makes a new choice
 - fstab entry uses label + resilient options:
 
 ```fstab

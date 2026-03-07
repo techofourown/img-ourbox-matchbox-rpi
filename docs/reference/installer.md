@@ -29,6 +29,10 @@ Key variables:
 - Installer loads baked defaults, then attempts to pull `${INSTALL_DEFAULTS_REF}` and apply `defaults/${INSTALLER_ID}.env`.
 - If remote defaults pull fails, installer falls back to baked defaults.
 - Boot-media override (`/boot/firmware/ourbox-installer.env`) is applied last and wins.
+- Installer shows both NVMe disks and requires an explicit SYSTEM-disk choice; the other NVMe becomes DATA for that install.
+- If the chosen SYSTEM disk currently carries `LABEL=OURBOX_DATA`, installer requires an explicit repurpose confirmation before clearing that label and continuing.
+- If the chosen DATA disk already contains OurBox state, installer offers `RESET-BOOTSTRAP`, `ERASE-DATA`, or `KEEP-DATA`.
+- `KEEP-DATA` preserves existing DATA contents; bootstrap re-runs automatically on next boot only when the shipped contract state changed.
 - Default action order:
   1) `OS_REF` (if set)
   2) `OS_DEFAULT_REF` (if set)

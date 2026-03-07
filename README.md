@@ -5,6 +5,13 @@ Build repository for **OurBox Matchbox** OS images targeting **Raspberry Pi hard
 This repo produces an NVMe-bootable OS that mounts `/var/lib/ourbox` and boots into an airgapped
 single-node k3s runtime via `ourbox-bootstrap`.
 
+Installer and maintainer flash flows now use the same storage-role logic:
+
+- you explicitly choose which NVMe becomes `SYSTEM`
+- the other NVMe becomes `DATA` for that install
+- a former `DATA` disk can be repurposed as `SYSTEM` with explicit destructive confirmation
+- preserved `DATA` contents no longer suppress bootstrap permanently; bootstrap re-runs automatically when the shipped contract changes
+
 ## Identifiers used by this repo
 
 - **Model ID**: `TOO-OBX-MBX-01` (physical device class)
