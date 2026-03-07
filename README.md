@@ -81,3 +81,6 @@ Publication targets and upstream input pins are repo-defined in `release/`:
 Official Matchbox installer builds publish the OS artifact first and then bake that exact pinned
 OS payload ref into the installer defaults, so the published installer and its default install
 target stay on the same lane.
+Official nightly builds also resolve the latest `sw-ourbox-os` `edge` platform bundle digests at
+workflow time before building the OS image; release builds continue to consume the pinned refs in
+`release/official-inputs.env`.
