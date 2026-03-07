@@ -15,7 +15,7 @@ This is the only step-by-step doc. If reality and this file disagree, update thi
 - Platform pins: **pinned in `sw-ourbox-os`** and consumed via `contracts/airgap-platform.ref` and `contracts/platform-contract.ref`
 - Host tooling pins: **pinned** in `tools/versions.env` (BuildKit/ORAS)
 - Disk safety: **exactly two NVMe disks required**
-  - DATA: ext4 filesystem label `OURBOX_DATA` (must never be wiped)
+  - DATA: whichever NVMe disk this install assigns the ext4 label `OURBOX_DATA`
   - SYSTEM: the other NVMe disk (will be wiped)
 
 No copy/paste IDs. No “pick your own runtime”. No “latest”.
@@ -93,8 +93,10 @@ That script will:
 * pull pinned platform artifacts (`airgap-platform` + `platform-contract`) by OCI ref from `contracts/*.ref`
 * build the OS image
 * scan for NVMe disks and refuse to proceed unless there are exactly two
-* protect the DATA disk (label `OURBOX_DATA`) and pick the other NVMe as SYSTEM
-* if DATA already has OurBox state, force you to choose: RESET-BOOTSTRAP / ERASE-DATA / KEEP-DATA before flashing SYSTEM
+* show both NVMe disks and require you to choose which becomes SYSTEM
+* assign the other NVMe disk as DATA for this install
+* if the chosen SYSTEM disk currently carries `OURBOX_DATA`, force an explicit repurpose confirmation before it is wiped
+* if the chosen DATA disk already has OurBox state, force you to choose: RESET-BOOTSTRAP / ERASE-DATA / KEEP-DATA before flashing SYSTEM
 * require multiple explicit confirmations before wiping SYSTEM
 * wipe SYSTEM disk signatures (works even if already partitioned), then flash the OS image to the raw NVMe disk
 * prompt you for username and password (writes `userconf.txt` to the boot partition)

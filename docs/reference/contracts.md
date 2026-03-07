@@ -57,6 +57,7 @@ See `docs/reference/platform-contract.md` for the full provenance model and arti
 
 - The DATA drive is **ext4** with filesystem label: `OURBOX_DATA`
 - It mounts at: `/var/lib/ourbox`
+- Either physical NVMe may serve as DATA on a given install; the role is determined by the label, not by a permanently reserved slot
 
 ### Implementation
 
@@ -120,7 +121,8 @@ Installer media contains the runtime installer and fetches the OS payload at ins
 
 * `k3s` binary exists at `/usr/local/bin/k3s`
 * `k3s.service` exists and is enabled by bootstrap (or enabled directly)
-* `ourbox-bootstrap.service` exists and runs on first boot
+* `ourbox-bootstrap.service` exists and runs at boot
+* bootstrap skips reapply only when the stored applied contract state still matches the shipped contract
 * Success marker: `/var/lib/ourbox/state/bootstrap.done`
 * k3s data lives under `/var/lib/ourbox/k3s`
 

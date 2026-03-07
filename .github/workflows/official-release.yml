@@ -48,12 +48,6 @@ jobs:
           OURBOX_TARGET: rpi
           OURBOX_VARIANT: prod
 
-      - name: Build installer image
-        run: sudo ./tools/build-installer-image.sh
-        env:
-          OURBOX_TARGET: rpi
-          OURBOX_VARIANT: prod
-
       - name: Reclaim build output ownership
         run: sudo chown -R "$(id -u):$(id -g)" deploy/
 
@@ -61,6 +55,29 @@ jobs:
         run: ./tools/publish-os-artifact-official.sh release
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+      - name: Resolve installer default OS ref
+        run: |
+          set -euo pipefail
+          echo "OS_DEFAULT_REF=$(cat deploy/os-artifact.pinned.ref)" >> "${GITHUB_ENV}"
+
+      - name: Build installer image
+        run: sudo ./tools/build-installer-image.sh
+        env:
+          OURBOX_TARGET: rpi
+          OURBOX_VARIANT: prod
+          OS_REPO: ghcr.io/techofourown/ourbox-matchbox-os
+          OS_DEFAULT_REF: ${{ env.OS_DEFAULT_REF }}
+          INSTALL_DEFAULTS_REF: ""
+
+      - name: Reclaim installer output ownership
+        run: sudo chown -R "$(id -u):$(id -g)" deploy/
+
+      - name: Smoke check baked installer defaults
+        run: ./tools/check-installer-defaults-smoke.sh
+        env:
+          OURBOX_TARGET: rpi
+          EXPECTED_OS_DEFAULT_REF: ${{ env.OS_DEFAULT_REF }}
 
       - name: Publish installer artifact (official release)
         run: ./tools/publish-installer-artifact-official.sh release
@@ -81,4 +98,6 @@ jobs:
             deploy/installer-artifact.pinned.ref
             deploy/installer-artifact.digest
             deploy/installer-artifact.meta.env
+            deploy/installer-defaults.extracted.env
+            deploy/installer-defaults-smoke.txt
           if-no-files-found: warn

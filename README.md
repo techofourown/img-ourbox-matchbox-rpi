@@ -5,6 +5,13 @@ Build repository for **OurBox Matchbox** OS images targeting **Raspberry Pi hard
 This repo produces an NVMe-bootable OS that mounts `/var/lib/ourbox` and boots into an airgapped
 single-node k3s runtime via `ourbox-bootstrap`.
 
+Installer and maintainer flash flows now use the same storage-role logic:
+
+- you explicitly choose which NVMe becomes `SYSTEM`
+- the other NVMe becomes `DATA` for that install
+- a former `DATA` disk can be repurposed as `SYSTEM` with explicit destructive confirmation
+- preserved `DATA` contents no longer suppress bootstrap permanently; bootstrap re-runs automatically when the shipped contract changes
+
 ## Identifiers used by this repo
 
 - **Model ID**: `TOO-OBX-MBX-01` (physical device class)
@@ -72,3 +79,10 @@ Publication targets and upstream input pins are repo-defined in `release/`:
 
 - `release/official-artifacts.env` — official GHCR repos and channel names
 - `release/official-inputs.env` — digest-pinned upstream refs (update via PR when `sw-ourbox-os` ships new bundles)
+
+Official Matchbox installer builds publish the OS artifact first and then bake that exact pinned
+OS payload ref into the installer defaults, so the published installer and its default install
+target stay on the same lane.
+Official nightly builds also resolve the latest `sw-ourbox-os` `edge` platform bundle digests at
+workflow time before building the OS image; release builds continue to consume the pinned refs in
+`release/official-inputs.env`.
