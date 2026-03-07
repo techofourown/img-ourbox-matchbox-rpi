@@ -1,3 +1,13 @@
+## [0.9.3](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.9.2...v0.9.3) (2026-03-07)
+
+
+### Bug Fixes
+
+* **ci:** refresh nightly upstream platform inputs ([2a8fe8a](https://github.com/techofourown/img-ourbox-matchbox/commit/2a8fe8aec606c40075bdd1b9526eb64e7ba1aeae))
+* **installer:** pin official Matchbox default OS payload ([3f2c212](https://github.com/techofourown/img-ourbox-matchbox/commit/3f2c2125dc546b9d713c07dc36c101c97f016f9c))
+* **installer:** preserve explicit installer defaults behavior ([55dc754](https://github.com/techofourown/img-ourbox-matchbox/commit/55dc754087e6ffa3c5ca7fa95b59c3b75351c418))
+* **installer:** unify matchbox storage role flow ([24a458c](https://github.com/techofourown/img-ourbox-matchbox/commit/24a458cd93694c280c62bfb9f8751dc718d3dc1d))
+
 ## [0.9.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.9.1...v0.9.2) (2026-03-07)
 
 
