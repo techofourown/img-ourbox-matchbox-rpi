@@ -25,6 +25,17 @@ Line-oriented `KEY=VALUE` pairs (shell-friendly). Example keys:
 - `OURBOX_PLATFORM_CONTRACT_VERSION` (optional, when known)
 - `OURBOX_PLATFORM_CONTRACT_CREATED` (optional, when known)
 - `OURBOX_PLATFORM_CONTRACT_DIGEST` (optional, when OCI packaging exists)
+- `OURBOX_INSTALLER_ID`
+- `OURBOX_INSTALLER_VERSION`
+- `OURBOX_INSTALLER_GIT_HASH`
+- `OURBOX_OS_ARTIFACT_SOURCE`
+- `OURBOX_OS_ARTIFACT_REF`
+- `OURBOX_OS_ARTIFACT_DIGEST`
+- `OURBOX_OS_IMAGE_SHA256`
+- `OURBOX_INSTALL_DEFAULTS_SOURCE`
+- `OURBOX_INSTALL_DEFAULTS_REF`
+- `OURBOX_INSTALL_SELECTION_SOURCE`
+- `OURBOX_RELEASE_CHANNEL`
 
 ### Platform contract provenance (normative)
 
@@ -107,6 +118,7 @@ systemctl status fstrim.timer --no-pager
 Installer media contains the runtime installer and fetches the OS payload at install time.
 
 - Entrypoint: `/opt/ourbox/tools/ourbox-install`
+- Shared resolver policy: `/opt/ourbox/tools/installer-selection-resolver.sh`
 - Defaults: `/opt/ourbox/installer/defaults.env`
 - Optional override (on boot media): `/boot/firmware/ourbox-installer.env`
 - Payload/cache path: `/opt/ourbox/installer/cache/payload`
@@ -116,6 +128,8 @@ Installer media contains the runtime installer and fetches the OS payload at ins
   - `os.meta.env` (KEY=VALUE metadata: target/variant/version/sku/git_sha/k3s/platform contract digest)
   - optional: `os.info`, `build.log`
 - Optional catalog artifact `${OS_TARGET}-catalog` with `catalog.tsv` for interactive version selection.
+- After flashing, installer-selected payload provenance is appended directly to `/etc/ourbox/release`
+  on the installed root filesystem.
 
 ## Contract: Platform runtime (k3s)
 
