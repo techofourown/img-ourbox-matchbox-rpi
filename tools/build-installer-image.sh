@@ -19,6 +19,37 @@ trap cleanup_loopdevs_on_exit EXIT
 : "${OURBOX_TARGET:=rpi}"
 
 cd "${ROOT}"
+
+: "${OURBOX_MODEL_ID:=TOO-OBX-MBX-01}"
+: "${OURBOX_SKU_ID:=TOO-OBX-MBX-BASE-001}"
+: "${OURBOX_VARIANT:=dev}"
+: "${OURBOX_VERSION:=dev}"
+: "${OURBOX_REQUIRE_EXPLICIT_VERSION:=0}"
+: "${OS_REPO:=}"
+: "${INSTALL_DEFAULTS_REF:=}"
+: "${INSTALLER_ID:=}"
+: "${OS_CHANNEL:=}"
+: "${OS_DEFAULT_REF:=}"
+: "${OURBOX_REQUIRE_OS_DEFAULT_REF:=0}"
+: "${CHANNEL_STABLE_TAG:=}"
+: "${CHANNEL_BETA_TAG:=}"
+: "${CHANNEL_NIGHTLY_TAG:=}"
+: "${CHANNEL_EXP_LABS_TAG:=}"
+: "${OS_CATALOG_ENABLED:=}"
+: "${OS_CATALOG_TAG:=}"
+: "${OS_ARTIFACT_TYPE:=}"
+: "${OS_ORAS_VERSION:=}"
+: "${OS_REGISTRY_USERNAME:=}"
+: "${OS_REGISTRY_PASSWORD:=}"
+
+if [[ "${OURBOX_REQUIRE_EXPLICIT_VERSION}" == "1" && "${OURBOX_VERSION}" == "dev" ]]; then
+  die "OURBOX_VERSION resolved to the default 'dev'; preserve the workflow env across sudo (official lanes should use sudo -E)"
+fi
+
+if [[ "${OURBOX_REQUIRE_OS_DEFAULT_REF}" == "1" && -z "${OS_DEFAULT_REF}" ]]; then
+  die "OS_DEFAULT_REF is required for this installer build but resolved empty before pi-gen started"
+fi
+
 mkdir -p "${ROOT}/deploy"
 if [[ ! -w "${ROOT}/deploy" ]]; then
   if command -v sudo >/dev/null 2>&1; then
@@ -46,26 +77,6 @@ if [[ ${EUID} -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
 fi
 
 ensure_buildkitd
-
-: "${OURBOX_MODEL_ID:=TOO-OBX-MBX-01}"
-: "${OURBOX_SKU_ID:=TOO-OBX-MBX-BASE-001}"
-: "${OURBOX_VARIANT:=dev}"
-: "${OURBOX_VERSION:=dev}"
-: "${OS_REPO:=}"
-: "${INSTALL_DEFAULTS_REF:=}"
-: "${INSTALLER_ID:=}"
-: "${OS_CHANNEL:=}"
-: "${OS_DEFAULT_REF:=}"
-: "${CHANNEL_STABLE_TAG:=}"
-: "${CHANNEL_BETA_TAG:=}"
-: "${CHANNEL_NIGHTLY_TAG:=}"
-: "${CHANNEL_EXP_LABS_TAG:=}"
-: "${OS_CATALOG_ENABLED:=}"
-: "${OS_CATALOG_TAG:=}"
-: "${OS_ARTIFACT_TYPE:=}"
-: "${OS_ORAS_VERSION:=}"
-: "${OS_REGISTRY_USERNAME:=}"
-: "${OS_REGISTRY_PASSWORD:=}"
 
 export PIGEN_DOCKER_OPTS="${PIGEN_DOCKER_OPTS:-} \
   --volume ${ROOT}:/ourbox:ro \

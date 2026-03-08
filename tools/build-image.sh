@@ -17,6 +17,18 @@ trap cleanup_loopdevs_on_exit EXIT
 # Always operate from repo root so any relative paths (including vendor/pi-gen) are stable.
 cd "${ROOT}"
 
+# Defaults (override by prefixing env vars when invoking)
+: "${OURBOX_TARGET:=rpi}"
+: "${OURBOX_MODEL_ID:=TOO-OBX-MBX-01}"
+: "${OURBOX_SKU_ID:=TOO-OBX-MBX-BASE-001}"
+: "${OURBOX_VARIANT:=prod}"
+: "${OURBOX_VERSION:=dev}"
+: "${OURBOX_REQUIRE_EXPLICIT_VERSION:=0}"
+
+if [[ "${OURBOX_REQUIRE_EXPLICIT_VERSION}" == "1" && "${OURBOX_VERSION}" == "dev" ]]; then
+  die "OURBOX_VERSION resolved to the default 'dev'; preserve the workflow env across sudo (official lanes should use sudo -E)"
+fi
+
 # pi-gen's docker wrapper writes logs to ./deploy (e.g. deploy/build-docker.log).
 # On a fresh clone, deploy/ may not exist; create it up-front so the build can't fail at the end.
 mkdir -p "${ROOT}/deploy"
@@ -58,13 +70,6 @@ log "Preflight: validating loop-device health before build"
 
 # Ensure build dependencies are pulled from OUR registry and tagged to the names vendor expects.
 "${ROOT}/tools/pull-required-images.sh"
-
-# Defaults (override by prefixing env vars when invoking)
-: "${OURBOX_TARGET:=rpi}"
-: "${OURBOX_MODEL_ID:=TOO-OBX-MBX-01}"
-: "${OURBOX_SKU_ID:=TOO-OBX-MBX-BASE-001}"
-: "${OURBOX_VARIANT:=prod}"
-: "${OURBOX_VERSION:=dev}"
 
 # Compatibility bridge: OURBOX_SKU points to the SKU_ID for internal use
 OURBOX_SKU="${OURBOX_SKU_ID}"

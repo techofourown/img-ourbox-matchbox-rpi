@@ -52,7 +52,7 @@ jobs:
         run: ./tools/fetch-airgap-platform.sh
 
       - name: Build OS image
-        run: sudo ./tools/build-image.sh
+        run: sudo -E ./tools/build-image.sh
 
       - name: Upload build outputs
         uses: actions/upload-artifact@v4

@@ -44,10 +44,11 @@ jobs:
         run: ./tools/fetch-airgap-platform.sh
 
       - name: Build OS image
-        run: sudo ./tools/build-image.sh
+        run: sudo -E ./tools/build-image.sh
         env:
           OURBOX_TARGET: rpi
           OURBOX_VARIANT: prod
+          OURBOX_REQUIRE_EXPLICIT_VERSION: "1"
 
       - name: Reclaim build output ownership
         run: sudo chown -R "$(id -u):$(id -g)" deploy/
@@ -61,13 +62,15 @@ jobs:
           echo "OS_DEFAULT_REF=$(cat deploy/os-artifact.pinned.ref)" >> "${GITHUB_ENV}"
 
       - name: Build installer image
-        run: sudo ./tools/build-installer-image.sh
+        run: sudo -E ./tools/build-installer-image.sh
         env:
           OURBOX_TARGET: rpi
           OURBOX_VARIANT: prod
           OS_REPO: ghcr.io/techofourown/ourbox-matchbox-os
           OS_DEFAULT_REF: ${{ env.OS_DEFAULT_REF }}
           INSTALL_DEFAULTS_REF: ""
+          OURBOX_REQUIRE_EXPLICIT_VERSION: "1"
+          OURBOX_REQUIRE_OS_DEFAULT_REF: "1"
 
       - name: Reclaim installer output ownership
         run: sudo chown -R "$(id -u):$(id -g)" deploy/
