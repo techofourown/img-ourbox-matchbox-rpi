@@ -1,3 +1,11 @@
+## [0.10.1](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.0...v0.10.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* **ci:** add release-side promotion wake-up ([d0b1391](https://github.com/techofourown/img-ourbox-matchbox/commit/d0b13914b91260c2034a368fbf9051cc761f1b86))
+* **ci:** gate promotion on candidate provenance ([9845be9](https://github.com/techofourown/img-ourbox-matchbox/commit/9845be9567d5d9d39fc4c989024e9dfa0a69f8a9))
+
 # [0.10.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.9.5...v0.10.0) (2026-03-08)
 
 
