@@ -13,6 +13,7 @@ need_cmd python3
 PROMOTION_CONTEXT="${1:?Usage: resolve-promotable-release.sh stable|exp-labs <source-commit>}"
 SOURCE_COMMIT="${2:?Usage: resolve-promotable-release.sh stable|exp-labs <source-commit>}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
+NO_MATCH_EXIT=3
 
 resolve_source_commit() {
   local release_ref="$1"
@@ -46,24 +47,26 @@ release_matches_context() {
   esac
 }
 
-while IFS= read -r tag; do
-  [[ -n "${tag}" ]] || continue
+json="$(gh release list --repo "${REPO}" --json tagName,isDraft,isPrerelease -L "${RELEASE_LIST_LIMIT:-100}")" \
+  || die "Unable to list GitHub releases for ${REPO}"
 
-  resolved_commit="$(resolve_source_commit "${tag}" 2>/dev/null || true)"
-  [[ -n "${resolved_commit}" && "${resolved_commit}" == "${SOURCE_COMMIT}" ]] || continue
+while IFS=$'\t' read -r release_tag is_draft is_prerelease; do
+  [[ -n "${release_tag}" ]] || continue
 
-  json="$(gh release view "${tag}" --repo "${REPO}" --json tagName,isDraft,isPrerelease 2>/dev/null || true)"
-  [[ -n "${json}" ]] || continue
-
-  read -r release_tag is_draft is_prerelease < <(
-    python3 -c 'import json,sys; data=json.load(sys.stdin); print(data["tagName"], str(data["isDraft"]).lower(), str(data["isPrerelease"]).lower())' \
-      <<<"${json}"
-  )
-
+  resolved_commit="$(resolve_source_commit "refs/tags/${release_tag}")"
+  [[ "${resolved_commit}" == "${SOURCE_COMMIT}" ]] || continue
   if release_matches_context "${is_draft}" "${is_prerelease}"; then
     printf '%s\n' "${release_tag}"
     exit 0
   fi
-done < <(git -C "${ROOT}" tag -l 'v*' --sort=-creatordate)
+done < <(
+  python3 -c 'import json,sys
+for release in json.load(sys.stdin):
+    print("\t".join([
+        release.get("tagName", ""),
+        str(release.get("isDraft", False)).lower(),
+        str(release.get("isPrerelease", False)).lower(),
+    ]))' <<<"${json}"
+)
 
-exit 1
+exit "${NO_MATCH_EXIT}"
