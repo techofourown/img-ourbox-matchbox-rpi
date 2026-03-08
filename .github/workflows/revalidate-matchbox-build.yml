@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: revalidate-matchbox
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   revalidate:

@@ -10,52 +10,12 @@ source "${ROOT}/tools/lib.sh"
 source "${ROOT}/release/official-artifacts.env"
 
 need_cmd oras
-need_cmd git
 need_cmd awk
 need_cmd date
 
 PROMOTION_CONTEXT="${1:?Usage: promote-os-artifact-official.sh stable|exp-labs}"
 DEPLOY_DIR="${ROOT}/deploy"
 mkdir -p "${DEPLOY_DIR}"
-
-resolve_source_commit() {
-  local release_ref="$1"
-  local commit subject
-
-  commit="$(git -C "${ROOT}" rev-parse "${release_ref}^{commit}" 2>/dev/null)" \
-    || die "Unable to resolve commit for release ref ${release_ref}"
-  subject="$(git -C "${ROOT}" log -1 --format=%s "${commit}" 2>/dev/null || true)"
-
-  if [[ "${subject}" == chore\(release\):* ]]; then
-    git -C "${ROOT}" rev-parse "${commit}^" 2>/dev/null \
-      || die "Unable to resolve source commit behind release commit ${commit}"
-  else
-    printf '%s\n' "${commit}"
-  fi
-}
-
-wait_for_source_digest() {
-  local source_ref="$1"
-  local timeout="${PROMOTE_WAIT_TIMEOUT_SECONDS:-14400}"
-  local interval="${PROMOTE_WAIT_INTERVAL_SECONDS:-30}"
-  local elapsed=0
-  local digest=""
-
-  while (( elapsed <= timeout )); do
-    digest="$(oras resolve "${source_ref}" 2>/dev/null || true)"
-    if [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-      printf '%s\n' "${digest}"
-      return 0
-    fi
-    if (( elapsed == 0 )); then
-      log "Waiting for promotable source artifact: ${source_ref}"
-    fi
-    sleep "${interval}"
-    elapsed=$((elapsed + interval))
-  done
-
-  return 1
-}
 
 update_catalog() {
   local channel_tag="$1" immutable_tag="$2" immutable_digest="$3"
@@ -97,10 +57,17 @@ update_catalog() {
 
 RELEASE_TAG="${RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
 [[ -n "${RELEASE_TAG}" ]] || die "release tag not set (RELEASE_TAG and GITHUB_REF_NAME are both empty)"
+PROMOTE_SOURCE_PINNED_REF="${PROMOTE_SOURCE_PINNED_REF:-}"
+[[ -n "${PROMOTE_SOURCE_PINNED_REF}" ]] || die "PROMOTE_SOURCE_PINNED_REF must point to the candidate pinned ref"
+PROMOTE_SOURCE_REF="${PROMOTE_SOURCE_REF:-${PROMOTE_SOURCE_PINNED_REF}}"
 
-SOURCE_COMMIT="$(resolve_source_commit "${RELEASE_TAG}")"
-SOURCE_SHA="$(git -C "${ROOT}" rev-parse --short=12 "${SOURCE_COMMIT}" 2>/dev/null)" \
-  || die "Unable to derive short SHA for ${SOURCE_COMMIT}"
+SOURCE_REPO="${PROMOTE_SOURCE_PINNED_REF%@*}"
+IMMUTABLE_DIGEST="${PROMOTE_SOURCE_PINNED_REF##*@}"
+[[ "${SOURCE_REPO}" == "${OFFICIAL_OS_REPO}" ]] \
+  || die "PROMOTE_SOURCE_PINNED_REF repo mismatch: expected ${OFFICIAL_OS_REPO}, got ${SOURCE_REPO}"
+[[ "${IMMUTABLE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] \
+  || die "PROMOTE_SOURCE_PINNED_REF must contain a digest-pinned ref"
+IMMUTABLE_PINNED_REF="${SOURCE_REPO}@${IMMUTABLE_DIGEST}"
 
 case "${PROMOTION_CONTEXT}" in
   stable)
@@ -116,21 +83,18 @@ case "${PROMOTION_CONTEXT}" in
     ;;
 esac
 
-SOURCE_IMMUTABLE_TAG="main-${SOURCE_SHA}-${OURBOX_TARGET}"
 TARGET_IMMUTABLE_TAG="${PROMOTE_VERSION}-${OURBOX_TARGET}"
-SOURCE_REF="${OFFICIAL_OS_REPO}:${SOURCE_IMMUTABLE_TAG}"
-
-log "Resolving promotable source artifact: ${SOURCE_REF}"
-IMMUTABLE_DIGEST="$(wait_for_source_digest "${SOURCE_REF}" || true)"
-[[ "${IMMUTABLE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] \
-  || die "Timed out waiting for promotable source artifact ${SOURCE_REF}"
-
-IMMUTABLE_PINNED_REF="${OFFICIAL_OS_REPO}@${IMMUTABLE_DIGEST}"
+SOURCE_REF="${PROMOTE_SOURCE_REF}"
 PROMOTE_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 CATALOG_HEADER=$'channel\ttag\tcreated\tversion\tvariant\ttarget\tsku\tgit_sha\tplatform_contract_digest\tk3s_version\timg_sha256\tartifact_digest\tpinned_ref'
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
+
+existing_target_digest="$(oras resolve "${OFFICIAL_OS_REPO}:${TARGET_IMMUTABLE_TAG}" 2>/dev/null || true)"
+if [[ -n "${existing_target_digest}" && "${existing_target_digest}" != "${IMMUTABLE_DIGEST}" ]]; then
+  die "Target immutable tag ${OFFICIAL_OS_REPO}:${TARGET_IMMUTABLE_TAG} already points to ${existing_target_digest}, not ${IMMUTABLE_DIGEST}"
+fi
 
 log "Pulling source artifact metadata"
 oras pull "${IMMUTABLE_PINNED_REF}" -o "${TMP}/source" >/dev/null
@@ -142,7 +106,7 @@ source "${META_FILE}"
 SHA256="${OS_IMAGE_SHA256:-unknown}"
 K3S_VERSION="${K3S_VERSION:-unknown}"
 CONTRACT_DIGEST="${OURBOX_PLATFORM_CONTRACT_DIGEST:-unknown}"
-GIT_SHA="${GIT_SHA:-${SOURCE_SHA}}"
+GIT_SHA="${GIT_SHA:-unknown}"
 
 log "Promoting ${IMMUTABLE_PINNED_REF} -> ${TARGET_IMMUTABLE_TAG} (${TARGET_CHANNEL_TAGS})"
 oras tag "${IMMUTABLE_PINNED_REF}" "${TARGET_IMMUTABLE_TAG}" >/dev/null

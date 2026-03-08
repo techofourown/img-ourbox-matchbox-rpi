@@ -1,31 +1,32 @@
 name: Official Promote Stable (Matchbox)
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Official Candidate Build & Publish (Matchbox)"]
+    types: [completed]
 
 permissions:
+  actions: read
   contents: read
   packages: write
 
 concurrency:
-  group: official-promote-stable-matchbox-${{ github.event.release.tag_name || github.run_id }}
+  group: official-promote-stable-matchbox-${{ github.event.workflow_run.head_sha || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   promote:
-    if: startsWith(github.event.release.tag_name, 'v') && !github.event.release.draft && !github.event.release.prerelease
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout release tag
+      - name: Checkout candidate revision
         uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ github.event.release.tag_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           fetch-tags: true
-          submodules: recursive
 
       - name: Install ORAS
         uses: oras-project/setup-oras@v1
@@ -33,21 +34,70 @@ jobs:
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Resolve authorized stable release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(./tools/resolve-promotable-release.sh stable "${{ github.event.workflow_run.head_sha }}" || true)"
+          if [[ -z "${tag}" ]]; then
+            echo "No published stable release found for candidate commit ${{ github.event.workflow_run.head_sha }}; skipping."
+            exit 0
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download candidate provenance
+        if: steps.release.outputs.tag != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: provenance-candidate-${{ github.event.workflow_run.head_sha }}
+          path: deploy/candidate-provenance
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load candidate provenance inputs
+        if: steps.release.outputs.tag != ''
+        run: |
+          set -euo pipefail
+          find_file() {
+            local name="$1"
+            local file
+            file="$(find deploy/candidate-provenance -type f -name "${name}" | head -n1 || true)"
+            [[ -n "${file}" ]] || {
+              echo "Missing ${name} in downloaded candidate provenance" >&2
+              exit 1
+            }
+            cat "${file}"
+          }
+          printf 'RELEASE_TAG=%s\n' "${{ steps.release.outputs.tag }}" >> "${GITHUB_ENV}"
+          printf 'OS_SOURCE_REF=%s\n' "$(find_file os-artifact.ref)" >> "${GITHUB_ENV}"
+          printf 'OS_SOURCE_PINNED_REF=%s\n' "$(find_file os-artifact.pinned.ref)" >> "${GITHUB_ENV}"
+          printf 'INSTALLER_SOURCE_REF=%s\n' "$(find_file installer-artifact.ref)" >> "${GITHUB_ENV}"
+          printf 'INSTALLER_SOURCE_PINNED_REF=%s\n' "$(find_file installer-artifact.pinned.ref)" >> "${GITHUB_ENV}"
+
       - name: Promote OS artifact to stable
+        if: steps.release.outputs.tag != ''
         run: ./tools/promote-os-artifact-official.sh stable
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          PROMOTE_SOURCE_REF: ${{ env.OS_SOURCE_REF }}
+          PROMOTE_SOURCE_PINNED_REF: ${{ env.OS_SOURCE_PINNED_REF }}
 
       - name: Promote installer artifact to stable
+        if: steps.release.outputs.tag != ''
         run: ./tools/promote-installer-artifact-official.sh stable
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          PROMOTE_SOURCE_REF: ${{ env.INSTALLER_SOURCE_REF }}
+          PROMOTE_SOURCE_PINNED_REF: ${{ env.INSTALLER_SOURCE_PINNED_REF }}
 
       - name: Upload provenance outputs
         uses: actions/upload-artifact@v4
-        if: always()
+        if: steps.release.outputs.tag != '' && always()
         with:
-          name: provenance-stable-${{ github.event.release.tag_name }}
+          name: provenance-stable-${{ steps.release.outputs.tag }}
           path: |
             deploy/os-artifact.ref
             deploy/os-artifact.pinned.ref
