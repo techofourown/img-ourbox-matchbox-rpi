@@ -49,7 +49,7 @@ jobs:
         run: sudo ./tools/bootstrap-host.sh
 
       - name: Build installer image
-        run: sudo ./tools/build-installer-image.sh
+        run: sudo -E ./tools/build-installer-image.sh
 
       - name: Upload build outputs
         uses: actions/upload-artifact@v4
