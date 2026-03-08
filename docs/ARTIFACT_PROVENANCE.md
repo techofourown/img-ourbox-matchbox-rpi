@@ -23,9 +23,9 @@ Both are published as ORAS OCI artifacts (non-runnable) to GHCR.
 | Channel tag(s) | Artifact | Trigger |
 |---|---|---|
 | `rpi-beta` / `rpi-installer-beta` | OS image / Installer | Push to `main` using pinned `release/official-inputs.env` (heavy build) |
-| `rpi-stable` / `rpi-installer-stable` | OS image / Installer | GitHub Release `published` (promotion only; no rebuild) |
+| `rpi-stable` / `rpi-installer-stable` | OS image / Installer | Promotion after both candidate completion and matching GitHub Release `published` authorization are true; whichever arrives second wakes the retag (no rebuild) |
 | `rpi-nightly` / `rpi-installer-nightly` | OS image / Installer | Scheduled integration build using floating upstream `edge` refs (heavy build) |
-| `rpi-exp-labs` / `rpi-installer-exp-labs` | OS image / Installer | GitHub Release `prereleased` (promotion only; no rebuild) |
+| `rpi-exp-labs` / `rpi-installer-exp-labs` | OS image / Installer | Promotion after both candidate completion and matching GitHub Release `prereleased` authorization are true; whichever arrives second wakes the retag (no rebuild) |
 
 Registry namespaces (from `release/official-artifacts.env`):
 - OS image: `ghcr.io/techofourown/ourbox-matchbox-os`
@@ -45,8 +45,8 @@ A catalog tag (`rpi-catalog`) accumulates one TSV row per published build.
 
 - Push to protected `main` branch (beta candidate build)
 - Scheduled nightly integration publish (floating upstream `edge` inputs)
-- GitHub Release `published` for stable promotion
-- GitHub Release `prereleased` for exp-labs promotion
+- Candidate completion on protected `main` plus GitHub Release `published` authorization for stable promotion; either event may wake promotion when the other condition is already satisfied
+- Candidate completion on protected `main` plus GitHub Release `prereleased` authorization for exp-labs promotion; either event may wake promotion when the other condition is already satisfied
 
 These are the only authorized triggers for the official publication lane.
 `workflow_dispatch` is intentionally absent from all official publish/promote workflows.
@@ -77,8 +77,8 @@ hidden build logic.
 |---|---|---|---|
 | Official candidate | `.github/workflows/official-candidate.yml` | `[self-hosted, official-heavy, pi-image]` | Push to `main` (source-filtered) |
 | Integration nightly | `.github/workflows/integration-nightly.yml` | `[self-hosted, official-heavy, pi-image]` | Daily cron |
-| Official promote stable | `.github/workflows/official-promote-stable.yml` | `ubuntu-latest` | GitHub Release `published` |
-| Official exp-labs promote | `.github/workflows/official-exp-labs.yml` | `ubuntu-latest` | GitHub Release `prereleased` |
+| Official promote stable | `.github/workflows/official-promote-stable.yml` | `ubuntu-latest` | Candidate completion or release publication; promotes only when both candidate success and matching GitHub Release `published` authorization are present |
+| Official exp-labs promote | `.github/workflows/official-exp-labs.yml` | `ubuntu-latest` | Candidate completion or prerelease publication; promotes only when both candidate success and matching GitHub Release `prereleased` authorization are present |
 
 The heavy build lanes (`official-candidate.yml`, `integration-nightly.yml`) run on
 organization-controlled build infrastructure in the `official-heavy-artifacts` runner group.
@@ -101,8 +101,9 @@ If a source change lands outside these ignored paths, it will trigger publicatio
 does not materially affect the built image.
 
 `integration-nightly.yml` is schedule-driven and intentionally ignores repo path filters.
-The release-driven promotion workflows are also unfiltered because they do not rebuild: they
-only retag an already-published immutable digest after an explicit GitHub Release act.
+The dual-condition promotion workflows are also unfiltered because they do not rebuild: they
+only retag an already-published immutable digest after both candidate provenance and the explicit
+GitHub Release authorization are present for that source commit.
 
 ### Forcing an official republish without source changes
 

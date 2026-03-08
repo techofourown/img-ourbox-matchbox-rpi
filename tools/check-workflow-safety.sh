@@ -6,11 +6,12 @@
 #      pull_request or pull_request_target (untrusted code on privileged builder).
 #   2. No official publish/promote workflow may expose a broad workflow_dispatch
 #      trigger (official publication must only flow from push-to-main, schedule,
-#      or constrained release events).
+#      or dual-condition promotion handoff).
 #   3. Official publish workflows triggered by branch push must declare a path
 #      filter (paths-ignore or paths) to avoid rebuilding on docs-only changes.
-#   4. Official promote workflows using a release: trigger must constrain to a
-#      trusted event set: [published], [prereleased], or [published, prereleased].
+#   4. If an official promote workflow uses a release: trigger, it must constrain
+#      to a trusted event set: [published], [prereleased], or
+#      [published, prereleased].
 #
 # Run in CI on every PR and push to main.
 set -euo pipefail
@@ -62,7 +63,7 @@ while IFS= read -r wf; do
   fi
 
   if grep -qE '^  workflow_dispatch:' "${wf}"; then
-    fail "${name}: official publish/promote workflow exposes workflow_dispatch — official publication must only trigger from push-to-main, schedule, or constrained release events"
+    fail "${name}: official publish/promote workflow exposes workflow_dispatch — official publication must only trigger from push-to-main, schedule, or dual-condition promotion handoff"
   else
     PASS=$((PASS + 1))
   fi

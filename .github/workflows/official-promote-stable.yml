@@ -1,31 +1,48 @@
 name: Official Promote Stable (Matchbox)
 
 on:
+  workflow_run:
+    workflows: ["Official Candidate Build & Publish (Matchbox)"]
+    types: [completed]
   release:
     types: [published]
 
 permissions:
+  actions: read
   contents: read
   packages: write
 
 concurrency:
-  group: official-promote-stable-matchbox-${{ github.event.release.tag_name || github.run_id }}
+  group: official-promote-stable-matchbox
   cancel-in-progress: false
 
 jobs:
   promote:
-    if: startsWith(github.event.release.tag_name, 'v') && !github.event.release.draft && !github.event.release.prerelease
+    if: >
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push') ||
+      github.event_name == 'release'
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 60
 
     steps:
+      - name: Checkout candidate revision
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Checkout release tag
+        if: github.event_name == 'release'
         uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ github.event.release.tag_name }}
           fetch-depth: 0
           fetch-tags: true
-          submodules: recursive
 
       - name: Install ORAS
         uses: oras-project/setup-oras@v1
@@ -33,21 +50,133 @@ jobs:
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Resolve promotion context
+        id: context
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROMOTION_CONTEXT: stable
+          CANDIDATE_WORKFLOW_NAME: Official Candidate Build & Publish (Matchbox)
+        run: |
+          set -euo pipefail
+
+          resolve_source_commit() {
+            local release_ref="$1"
+            local commit subject
+
+            commit="$(git rev-parse "${release_ref}^{commit}" 2>/dev/null)" \
+              || {
+                echo "Unable to resolve commit for release ref ${release_ref}" >&2
+                exit 1
+              }
+            subject="$(git log -1 --format=%s "${commit}" 2>/dev/null || true)"
+
+            if [[ "${subject}" == chore\(release\):* ]]; then
+              git rev-parse "${commit}^" 2>/dev/null \
+                || {
+                  echo "Unable to resolve source commit behind release commit ${commit}" >&2
+                  exit 1
+                }
+            else
+              printf '%s\n' "${commit}"
+            fi
+          }
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            source_commit="${{ github.event.workflow_run.head_sha }}"
+            candidate_run_id="${{ github.event.workflow_run.id }}"
+            if release_tag="$(./tools/resolve-promotable-release.sh "${PROMOTION_CONTEXT}" "${source_commit}")"; then
+              :
+            else
+              status=$?
+              if [[ "${status}" -eq 3 ]]; then
+                echo "No published stable release authorization yet for source commit ${source_commit}; skipping."
+                echo "skip=true" >> "${GITHUB_OUTPUT}"
+                exit 0
+              fi
+              exit "${status}"
+            fi
+          elif [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            if [[ "${{ github.event.release.draft }}" == "true" || "${{ github.event.release.prerelease }}" == "true" ]]; then
+              echo "Release ${GITHUB_REF_NAME} is not a published stable authorization; skipping."
+              echo "skip=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            release_tag="${{ github.event.release.tag_name }}"
+            source_commit="$(resolve_source_commit "refs/tags/${release_tag}")"
+
+            if candidate_run_id="$(./tools/find-successful-candidate-run.sh "${CANDIDATE_WORKFLOW_NAME}" "${source_commit}")"; then
+              :
+            else
+              status=$?
+              if [[ "${status}" -eq 3 ]]; then
+                echo "No successful candidate run yet for source commit ${source_commit}; skipping."
+                echo "skip=true" >> "${GITHUB_OUTPUT}"
+                exit 0
+              fi
+              exit "${status}"
+            fi
+          else
+            echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
+            exit 1
+          fi
+
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
+          echo "source_commit=${source_commit}" >> "${GITHUB_OUTPUT}"
+          echo "candidate_run_id=${candidate_run_id}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download candidate provenance
+        if: steps.context.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: provenance-candidate-${{ steps.context.outputs.source_commit }}
+          path: deploy/candidate-provenance
+          run-id: ${{ steps.context.outputs.candidate_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load candidate provenance inputs
+        if: steps.context.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          find_file() {
+            local name="$1"
+            local file
+            file="$(find deploy/candidate-provenance -type f -name "${name}" | head -n1 || true)"
+            [[ -n "${file}" ]] || {
+              echo "Missing ${name} in downloaded candidate provenance" >&2
+              exit 1
+            }
+            cat "${file}"
+          }
+          printf 'RELEASE_TAG=%s\n' "${{ steps.context.outputs.release_tag }}" >> "${GITHUB_ENV}"
+          printf 'OS_SOURCE_REF=%s\n' "$(find_file os-artifact.ref)" >> "${GITHUB_ENV}"
+          printf 'OS_SOURCE_PINNED_REF=%s\n' "$(find_file os-artifact.pinned.ref)" >> "${GITHUB_ENV}"
+          printf 'INSTALLER_SOURCE_REF=%s\n' "$(find_file installer-artifact.ref)" >> "${GITHUB_ENV}"
+          printf 'INSTALLER_SOURCE_PINNED_REF=%s\n' "$(find_file installer-artifact.pinned.ref)" >> "${GITHUB_ENV}"
+
       - name: Promote OS artifact to stable
+        if: steps.context.outputs.skip != 'true'
         run: ./tools/promote-os-artifact-official.sh stable
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          PROMOTE_SOURCE_REF: ${{ env.OS_SOURCE_REF }}
+          PROMOTE_SOURCE_PINNED_REF: ${{ env.OS_SOURCE_PINNED_REF }}
 
       - name: Promote installer artifact to stable
+        if: steps.context.outputs.skip != 'true'
         run: ./tools/promote-installer-artifact-official.sh stable
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          PROMOTE_SOURCE_REF: ${{ env.INSTALLER_SOURCE_REF }}
+          PROMOTE_SOURCE_PINNED_REF: ${{ env.INSTALLER_SOURCE_PINNED_REF }}
 
       - name: Upload provenance outputs
         uses: actions/upload-artifact@v4
-        if: always()
+        if: steps.context.outputs.skip != 'true' && always()
         with:
-          name: provenance-stable-${{ github.event.release.tag_name }}
+          name: provenance-stable-${{ steps.context.outputs.release_tag }}
           path: |
             deploy/os-artifact.ref
             deploy/os-artifact.pinned.ref
