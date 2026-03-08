@@ -1,3 +1,10 @@
+## [0.10.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.1...v0.10.2) (2026-03-08)
+
+
+### Bug Fixes
+
+* **ci:** preserve matchbox build inputs across sudo ([c516a38](https://github.com/techofourown/img-ourbox-matchbox/commit/c516a38d56d5a4ddf57c95db1c310679a19f33f3))
+
 ## [0.10.1](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.0...v0.10.1) (2026-03-08)
 
 
