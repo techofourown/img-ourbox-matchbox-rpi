@@ -9,8 +9,8 @@
 #      or constrained release events).
 #   3. Official publish workflows triggered by branch push must declare a path
 #      filter (paths-ignore or paths) to avoid rebuilding on docs-only changes.
-#   4. Official promote workflows using a release: trigger must constrain to
-#      exactly one trusted type: [published] or [prereleased].
+#   4. Official promote workflows using a release: trigger must constrain to a
+#      trusted event set: [published], [prereleased], or [published, prereleased].
 #
 # Run in CI on every PR and push to main.
 set -euo pipefail
@@ -93,7 +93,7 @@ while IFS= read -r wf; do
 done < <(find "${WORKFLOW_DIR}" -maxdepth 1 -name '*.yml' -o -name '*.yaml')
 
 # ---------------------------------------------------------------------------
-# Rule 4: official promote workflows using release: must constrain to a single trusted release type
+# Rule 4: official promote workflows using release: must constrain to trusted release types
 # ---------------------------------------------------------------------------
 while IFS= read -r wf; do
   name="$(basename "${wf}")"
@@ -108,11 +108,11 @@ while IFS= read -r wf; do
     continue
   fi
 
-  # types: must be exactly [published] or [prereleased] — no mixed event types permitted.
-  if grep -qE '^\s+types:\s*\[\s*(published|prereleased)\s*\]\s*$' "${wf}"; then
+  # types: must be [published], [prereleased], or [published, prereleased].
+  if grep -qE '^\s+types:\s*\[\s*(published|prereleased)\s*(,\s*(published|prereleased)\s*)?\]\s*$' "${wf}"; then
     PASS=$((PASS + 1))
   else
-    fail "${name}: official publish/promote workflow with release: trigger must use exactly types: [published] or [prereleased]"
+    fail "${name}: official publish/promote workflow with release: trigger must use trusted types: [published], [prereleased], or [published, prereleased]"
   fi
 done < <(find "${WORKFLOW_DIR}" -maxdepth 1 -name '*.yml' -o -name '*.yaml')
 

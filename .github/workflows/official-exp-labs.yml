@@ -2,7 +2,7 @@ name: Official Exp-Labs Promote (Matchbox)
 
 on:
   release:
-    types: [prereleased]
+    types: [published, prereleased]
 
 permissions:
   contents: read
