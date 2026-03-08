@@ -24,6 +24,8 @@ emit_shell_assignment() {
   printf '%s=%q\n' "${name}" "${value}"
 }
 
+OURBOX_RECIPE_GIT_HASH="$(git -C /ourbox rev-parse HEAD 2>/dev/null || echo unknown)"
+
 # shellcheck disable=SC2016
 DEFAULT_INSTALLER_SSH_PASSWORD_HASH='$6$ourboxinstall$GgJGorVZ2X.yl0cQk8yIqYDawhEuB47d9m.k9t9HP1afvwC3ALmMxTDtKT2NjDBMqkUOVzvm7LK2ZHxBt2KxH1'
 OURBOX_INSTALLER_SSH_MODE="${OURBOX_INSTALLER_SSH_MODE:-key}"
@@ -129,6 +131,8 @@ fi
 : "${OS_REGISTRY_USERNAME:=}"
 : "${OS_REGISTRY_PASSWORD:=}"
 : "${OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE:=0}"
+: "${INSTALLER_VERSION:=${OURBOX_VERSION:-dev}}"
+: "${INSTALLER_GIT_HASH:=${OURBOX_RECIPE_GIT_HASH}}"
 
 {
   cat <<'EOF'
@@ -179,6 +183,12 @@ EOF
   emit_shell_assignment "OS_ORAS_VERSION" "${OS_ORAS_VERSION}"
   cat <<'EOF'
 
+# Installer artifact identity baked at image build time.
+EOF
+  emit_shell_assignment "INSTALLER_VERSION" "${INSTALLER_VERSION}"
+  emit_shell_assignment "INSTALLER_GIT_HASH" "${INSTALLER_GIT_HASH}"
+  cat <<'EOF'
+
 # Optional registry auth (if your repo is private)
 EOF
   emit_shell_assignment "OS_REGISTRY_USERNAME" "${OS_REGISTRY_USERNAME}"
@@ -195,6 +205,7 @@ EOF
 
 chmod 0755 /opt/ourbox/tools/ourbox-install
 chmod 0644 /opt/ourbox/tools/lib.sh
+chmod 0644 /opt/ourbox/tools/installer-selection-resolver.sh
 
 install -d -m 0755 /run/sshd
 test_hostkey_dir="$(mktemp -d)"

@@ -26,9 +26,11 @@ need_cmd sync
 need_cmd curl
 need_cmd tar
 need_cmd ip
+need_cmd sort
 
 DATA_CHECK_MP="/run/ourbox-installer/data-check"
 SYS_BOOT_MP="/run/ourbox-installer/sys-boot"
+SYS_ROOT_MP="/run/ourbox-installer/sys-root"
 PAYLOAD_DIR="/opt/ourbox/installer/cache/payload"
 CATALOG_DIR="/opt/ourbox/installer/cache/catalog"
 INSTALL_DEFAULTS_DIR="/opt/ourbox/installer/cache/install-defaults"
@@ -53,23 +55,37 @@ CHANNEL_STABLE_TAG=""
 CHANNEL_BETA_TAG=""
 CHANNEL_NIGHTLY_TAG=""
 CHANNEL_EXP_LABS_TAG=""
-INSTALL_DEFAULTS_APPLIED=0
 INSTALL_DEFAULTS_PROFILE=""
 SELECTED_REF=""
 PAYLOAD_PATH=""
 PAYLOAD_SHA256=""
 PAYLOAD_META=""
 OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE="0"
+INSTALLER_VERSION=""
+INSTALLER_GIT_HASH=""
+INSTALL_SELECTION_SOURCE=""
+RELEASE_CHANNEL=""
+DEFAULT_SELECTION_SOURCE=""
+DEFAULT_RELEASE_CHANNEL=""
+PULL_REF=""
+OS_ARTIFACT_SOURCE="registry"
+OS_ARTIFACT_REF=""
+OS_ARTIFACT_DIGEST=""
 # shellcheck disable=SC2034  # consumed by sourced storage-flow helper
 MATCHBOX_DATA_CHECK_MP="${DATA_CHECK_MP}"
 
 # shellcheck disable=SC1091
 source /opt/ourbox/tools/matchbox-storage-flow.sh
+# shellcheck disable=SC1091
+source /opt/ourbox/tools/installer-selection-resolver.sh
 
 cleanup_mounts() {
   matchbox_cleanup_data_check_mp
   if mountpoint -q "${SYS_BOOT_MP}"; then
     umount "${SYS_BOOT_MP}" >/dev/null 2>&1 || true
+  fi
+  if mountpoint -q "${SYS_ROOT_MP}"; then
+    umount "${SYS_ROOT_MP}" >/dev/null 2>&1 || true
   fi
 }
 
@@ -106,6 +122,17 @@ prompt_confirm_exact() {
   [[ "${ans}" == "${expected}" ]] || die "confirmation did not match (expected: ${expected})"
 }
 
+matchbox_partition_path() {
+  local disk="$1"
+  local part_num="$2"
+
+  if [[ "${disk}" =~ [0-9]$ ]]; then
+    printf '%s\n' "${disk}p${part_num}"
+  else
+    printf '%s\n' "${disk}${part_num}"
+  fi
+}
+
 normalize_payload_config() {
   OS_REPO="${OS_REPO:-ghcr.io/techofourown/ourbox-matchbox-os}"
   OS_TARGET="${OS_TARGET:-rpi}"
@@ -125,6 +152,8 @@ normalize_payload_config() {
   CHANNEL_NIGHTLY_TAG="${CHANNEL_NIGHTLY_TAG:-${OS_TARGET}-nightly}"
   CHANNEL_EXP_LABS_TAG="${CHANNEL_EXP_LABS_TAG:-${OS_TARGET}-exp-labs}"
   OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE="${OURBOX_INSTALLER_SSH_TEARDOWN_ON_COMPLETE:-0}"
+  INSTALLER_VERSION="${INSTALLER_VERSION:-unknown}"
+  INSTALLER_GIT_HASH="${INSTALLER_GIT_HASH:-unknown}"
 }
 
 teardown_installer_ssh() {
@@ -148,57 +177,16 @@ load_payload_config() {
 }
 
 load_remote_install_defaults() {
-  INSTALL_DEFAULTS_APPLIED=0
   INSTALL_DEFAULTS_PROFILE=""
-  local baked_os_default_ref="${OS_DEFAULT_REF:-}"
 
-  [[ -n "${INSTALL_DEFAULTS_REF}" ]] || return 0
+  ourbox_selection_load_remote_install_defaults \
+    "${INSTALL_DEFAULTS_DIR}" \
+    "${INSTALL_DEFAULTS_EXTRACT_DIR}" \
+    "${OVERRIDE_ENV}"
 
-  rm -rf "${INSTALL_DEFAULTS_DIR}" "${INSTALL_DEFAULTS_EXTRACT_DIR}"
-  mkdir -p "${INSTALL_DEFAULTS_DIR}" "${INSTALL_DEFAULTS_EXTRACT_DIR}"
-
-  log "Pulling installer defaults: ${INSTALL_DEFAULTS_REF}"
-  if ! oras pull "${INSTALL_DEFAULTS_REF}" -o "${INSTALL_DEFAULTS_DIR}" >/dev/null 2>&1; then
-    log "Install defaults pull failed; using baked defaults."
-    return 0
+  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE}" == "remote" ]]; then
+    INSTALL_DEFAULTS_PROFILE="${OURBOX_INSTALL_DEFAULTS_PROFILE}"
   fi
-
-  local tarball
-  tarball="${INSTALL_DEFAULTS_DIR}/dist/install-defaults.tar.gz"
-  if [[ ! -f "${tarball}" ]]; then
-    tarball="$(find "${INSTALL_DEFAULTS_DIR}" -maxdepth 4 -type f -name 'install-defaults.tar.gz' | head -n 1 || true)"
-  fi
-  [[ -n "${tarball}" && -f "${tarball}" ]] || { log "Install defaults artifact missing tarball; using baked defaults."; return 0; }
-
-  if ! tar -xzf "${tarball}" -C "${INSTALL_DEFAULTS_EXTRACT_DIR}" >/dev/null 2>&1; then
-    log "Install defaults tar extraction failed; using baked defaults."
-    return 0
-  fi
-
-  local profile
-  profile="${INSTALL_DEFAULTS_EXTRACT_DIR}/install-defaults/defaults/${INSTALLER_ID}.env"
-  if [[ ! -f "${profile}" ]]; then
-    log "No install-defaults profile for installer '${INSTALLER_ID}'; using baked defaults."
-    return 0
-  fi
-
-  # shellcheck disable=SC1090
-  source "${profile}"
-  # Re-apply local boot-media overrides so operators keep final control.
-  # shellcheck disable=SC1090
-  [[ -f "${OVERRIDE_ENV}" ]] && source "${OVERRIDE_ENV}"
-
-  normalize_payload_config
-
-  # A baked pinned default ref should remain authoritative unless the
-  # install-defaults profile explicitly replaces it with another non-empty ref.
-  if [[ -n "${baked_os_default_ref}" && -z "${OS_DEFAULT_REF}" ]]; then
-    OS_DEFAULT_REF="${baked_os_default_ref}"
-  fi
-
-  INSTALL_DEFAULTS_APPLIED=1
-  INSTALL_DEFAULTS_PROFILE="${profile}"
-  log "Applied install-defaults profile for '${INSTALLER_ID}'."
 }
 
 map_arch() {
@@ -270,11 +258,13 @@ banner() {
 show_default_choice() {
   local ref="$1"
   echo
-  if [[ "${INSTALL_DEFAULTS_APPLIED}" -eq 1 ]]; then
-    echo "Install defaults profile: ${INSTALLER_ID} (${INSTALL_DEFAULTS_REF})"
+  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE}" == "remote" ]]; then
+    echo "Install defaults: remote (${INSTALL_DEFAULTS_REF})"
+    echo "Profile        : ${INSTALL_DEFAULTS_PROFILE}"
   else
-    echo "Install defaults profile: baked defaults"
+    echo "Install defaults: baked defaults"
   fi
+  echo "Default source : ${DEFAULT_SELECTION_SOURCE:-pending}"
   echo "Default: install '${ref}'"
   echo "Options:"
   echo "  [ENTER] Use default"
@@ -291,27 +281,11 @@ ref_from_tag() {
   echo "${OS_REPO}:${tag}"
 }
 
-tag_for_channel() {
-  local channel="$1"
-  case "${channel}" in
-    stable) echo "${CHANNEL_STABLE_TAG}" ;;
-    beta) echo "${CHANNEL_BETA_TAG}" ;;
-    nightly) echo "${CHANNEL_NIGHTLY_TAG}" ;;
-    exp-labs) echo "${CHANNEL_EXP_LABS_TAG}" ;;
-    *) echo "${OS_TARGET}-${channel}" ;;
-  esac
-}
-
 default_payload_ref() {
-  if [[ -n "${OS_REF}" ]]; then
-    echo "${OS_REF}"
-    return 0
-  fi
-  if [[ -n "${OS_DEFAULT_REF}" ]]; then
-    echo "${OS_DEFAULT_REF}"
-    return 0
-  fi
-  ref_from_tag "$(tag_for_channel "${OS_CHANNEL}")"
+  ourbox_selection_determine_default_ref "${CATALOG_DIR}/default"
+  DEFAULT_SELECTION_SOURCE="${OURBOX_INSTALL_SELECTION_SOURCE}"
+  DEFAULT_RELEASE_CHANNEL="${OURBOX_RELEASE_CHANNEL}"
+  printf '%s\n' "${OURBOX_SELECTED_REF}"
 }
 
 override_repo() {
@@ -346,41 +320,45 @@ choose_channel() {
   local pick=""
   read -r -p "Select channel [1-5]: " pick
   case "${pick}" in
-    1|"") SELECTED_REF="$(ref_from_tag "${CHANNEL_STABLE_TAG}")" ;;
-    2) SELECTED_REF="$(ref_from_tag "${CHANNEL_BETA_TAG}")" ;;
-    3) SELECTED_REF="$(ref_from_tag "${CHANNEL_NIGHTLY_TAG}")" ;;
-    4) SELECTED_REF="$(ref_from_tag "${CHANNEL_EXP_LABS_TAG}")" ;;
+    1|"")
+      SELECTED_REF="$(ref_from_tag "${CHANNEL_STABLE_TAG}")"
+      INSTALL_SELECTION_SOURCE="channel-tag"
+      RELEASE_CHANNEL="stable"
+      ;;
+    2)
+      SELECTED_REF="$(ref_from_tag "${CHANNEL_BETA_TAG}")"
+      INSTALL_SELECTION_SOURCE="channel-tag"
+      RELEASE_CHANNEL="beta"
+      ;;
+    3)
+      SELECTED_REF="$(ref_from_tag "${CHANNEL_NIGHTLY_TAG}")"
+      INSTALL_SELECTION_SOURCE="channel-tag"
+      RELEASE_CHANNEL="nightly"
+      ;;
+    4)
+      SELECTED_REF="$(ref_from_tag "${CHANNEL_EXP_LABS_TAG}")"
+      INSTALL_SELECTION_SOURCE="channel-tag"
+      RELEASE_CHANNEL="exp-labs"
+      ;;
     5)
       local ch=""
       read -r -p "Enter tag: " ch
       [[ -n "${ch}" ]] || die "tag cannot be empty"
       SELECTED_REF="$(ref_from_tag "${ch}")"
+      INSTALL_SELECTION_SOURCE="channel-tag"
+      RELEASE_CHANNEL=""
       ;;
     *) log "Invalid choice, using default";;
   esac
 }
 
-pull_catalog() {
-  [[ "${OS_CATALOG_ENABLED}" == "1" ]] || return 1
-  local dst="$1"
-  local ref="${OS_REPO}:${OS_CATALOG_TAG}"
-  rm -rf "${dst}"
-  mkdir -p "${dst}"
-  log "Pulling catalog: ${ref}"
-  if oras pull "${ref}" -o "${dst}" >/dev/null 2>&1; then
-    [[ -f "${dst}/catalog.tsv" ]] || return 1
-    CATALOG_REF="${ref}"
-    return 0
-  fi
-  return 1
-}
-
 select_from_catalog() {
   CATALOG_REF=""
-  pull_catalog "${CATALOG_DIR}" || { log "Catalog unavailable; skipping list."; return 1; }
+  ourbox_selection_pull_catalog "${CATALOG_DIR}" || { log "Catalog unavailable; skipping list."; return 1; }
+  CATALOG_REF="${OURBOX_CATALOG_REF}"
   local catalog="${CATALOG_DIR}/catalog.tsv"
 
-  mapfile -t entries < <(awk -F'\t' 'NR==1 && $1 ~ /channel/ {next} NF>=2 {print NR ":" $0}' "${catalog}")
+  mapfile -t entries < <(ourbox_selection_catalog_entries "${catalog}")
   if [[ "${#entries[@]}" -eq 0 ]]; then
     log "Catalog pulled (${CATALOG_REF}) but contained no entries."
     return 1
@@ -390,7 +368,7 @@ select_from_catalog() {
   echo "Catalog entries (${CATALOG_REF}):"
   local i=1
   for line in "${entries[@]}"; do
-    IFS=$'\t' read -r channel tag created version _variant _target _sku _gitsha contract _k3s _imgsha <<<"${line#*:}"
+    IFS=$'\t' read -r channel tag created version contract pinned_ref <<<"${line}"
     printf "  %d) %-12s %-30s %s %s %s\n" "${i}" "${channel}" "${tag}" "${version}" "${created}" "${contract}"
     i=$((i+1))
   done
@@ -404,14 +382,18 @@ select_from_catalog() {
     return 1
   fi
   local chosen="${entries[$((pick-1))]}"
-  IFS=$'\t' read -r channel tag created version _variant _target _sku _gitsha contract _k3s _imgsha <<<"${chosen#*:}"
-  SELECTED_REF="${OS_REPO}:${tag}"
+  IFS=$'\t' read -r channel tag created version contract pinned_ref <<<"${chosen}"
+  SELECTED_REF="${pinned_ref}"
+  INSTALL_SELECTION_SOURCE="catalog"
+  RELEASE_CHANNEL="${channel}"
   log "Selected ${SELECTED_REF} (channel=${channel}, version=${version}, contract=${contract})"
   return 0
 }
 
 select_payload_ref() {
   SELECTED_REF=""
+  INSTALL_SELECTION_SOURCE=""
+  RELEASE_CHANNEL=""
 
   while [[ -z "${SELECTED_REF}" ]]; do
     local default_ref
@@ -420,13 +402,19 @@ select_payload_ref() {
     local choice=""
     read -r -p "Choice: " choice
     case "${choice}" in
-      "" ) SELECTED_REF="${default_ref}" ;;
+      "" )
+        SELECTED_REF="${default_ref}"
+        INSTALL_SELECTION_SOURCE="${DEFAULT_SELECTION_SOURCE}"
+        RELEASE_CHANNEL="${DEFAULT_RELEASE_CHANNEL}"
+        ;;
       c ) choose_channel ;;
       l ) select_from_catalog || true ;;
       r )
         read -r -p "Enter full OCI ref (e.g., repo:tag or repo@sha256:...): " ref
         [[ -n "${ref}" ]] || { log "Ref cannot be empty"; continue; }
         SELECTED_REF="${ref}"
+        INSTALL_SELECTION_SOURCE="operator-override"
+        RELEASE_CHANNEL=""
         ;;
       o ) override_repo || true ;;
       q|Q ) die "Install aborted by user" ;;
@@ -440,12 +428,19 @@ parse_sha256_file() {
   awk 'NF>=1 {print $1; exit}' "${file}"
 }
 
+finalize_selected_payload_ref() {
+  ourbox_selection_finalize_registry_ref "${SELECTED_REF}"
+  PULL_REF="${OURBOX_PULL_REF}"
+  OS_ARTIFACT_SOURCE="${OURBOX_OS_ARTIFACT_SOURCE}"
+  OS_ARTIFACT_REF="${OURBOX_OS_ARTIFACT_REF}"
+  OS_ARTIFACT_DIGEST="${OURBOX_OS_ARTIFACT_DIGEST}"
+}
+
 pull_payload() {
-  local ref="$1"
   rm -rf "${PAYLOAD_DIR}"
   mkdir -p "${PAYLOAD_DIR}"
-  log "Pulling OS payload: ${ref}"
-  oras pull "${ref}" -o "${PAYLOAD_DIR}"
+  log "Pulling OS payload: ${PULL_REF}"
+  oras pull "${PULL_REF}" -o "${PAYLOAD_DIR}"
 
   PAYLOAD_PATH="${PAYLOAD_DIR}/os.img.xz"
   [[ -f "${PAYLOAD_PATH}" ]] || die "oras pull succeeded but os.img.xz missing from payload"
@@ -465,13 +460,20 @@ pull_payload() {
 
 show_payload_metadata() {
   echo
-  if [[ "${INSTALL_DEFAULTS_APPLIED}" -eq 1 ]]; then
-    echo "Install defaults: ${INSTALL_DEFAULTS_REF} (${INSTALL_DEFAULTS_PROFILE})"
+  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE}" == "remote" ]]; then
+    echo "Install defaults : remote (${INSTALL_DEFAULTS_REF})"
+    echo "Defaults profile : ${INSTALL_DEFAULTS_PROFILE}"
   else
-    echo "Install defaults: baked defaults"
+    echo "Install defaults : baked defaults"
   fi
-  echo "Payload source : ${SELECTED_REF}"
-  echo "Payload sha256 : ${PAYLOAD_SHA256}"
+  echo "Selection source: ${INSTALL_SELECTION_SOURCE:-unknown}"
+  if [[ -n "${RELEASE_CHANNEL}" ]]; then
+    echo "Release channel : ${RELEASE_CHANNEL}"
+  fi
+  echo "Payload source  : ${SELECTED_REF}"
+  echo "Pull ref        : ${PULL_REF}"
+  echo "Artifact digest : ${OS_ARTIFACT_DIGEST}"
+  echo "Payload sha256  : ${PAYLOAD_SHA256}"
   if [[ -f "${PAYLOAD_META}" ]]; then
     echo "Payload metadata:"
     while IFS='=' read -r k v; do
@@ -482,6 +484,39 @@ show_payload_metadata() {
     echo "Payload metadata: (os.meta.env not present)"
   fi
   echo
+}
+
+write_install_provenance() {
+  local sys_disk="$1"
+  local root_part=""
+  local release_file=""
+
+  root_part="$(matchbox_partition_path "${sys_disk}" 2)"
+  install -d -m 0755 "${SYS_ROOT_MP}"
+  if mountpoint -q "${SYS_ROOT_MP}"; then
+    umount "${SYS_ROOT_MP}" >/dev/null 2>&1 || true
+  fi
+
+  mount "${root_part}" "${SYS_ROOT_MP}"
+  release_file="${SYS_ROOT_MP}/etc/ourbox/release"
+  [[ -f "${release_file}" ]] || die "installed release metadata missing: ${release_file}"
+
+  cat >> "${release_file}" <<EOF
+OURBOX_INSTALLER_ID=${INSTALLER_ID:-matchbox}
+OURBOX_INSTALLER_VERSION=${INSTALLER_VERSION:-unknown}
+OURBOX_INSTALLER_GIT_HASH=${INSTALLER_GIT_HASH:-unknown}
+OURBOX_OS_ARTIFACT_SOURCE=${OS_ARTIFACT_SOURCE:-unknown}
+OURBOX_OS_ARTIFACT_REF=${OS_ARTIFACT_REF:-unknown}
+OURBOX_OS_ARTIFACT_DIGEST=${OS_ARTIFACT_DIGEST:-unknown}
+OURBOX_OS_IMAGE_SHA256=${PAYLOAD_SHA256:-unknown}
+OURBOX_INSTALL_DEFAULTS_SOURCE=${OURBOX_INSTALL_DEFAULTS_SOURCE:-baked}
+OURBOX_INSTALL_DEFAULTS_REF=${INSTALL_DEFAULTS_REF:-}
+OURBOX_INSTALL_SELECTION_SOURCE=${INSTALL_SELECTION_SOURCE:-unknown}
+OURBOX_RELEASE_CHANNEL=${RELEASE_CHANNEL:-}
+EOF
+  sync
+  umount "${SYS_ROOT_MP}"
+  log "Install provenance appended to /etc/ourbox/release"
 }
 
 main() {
@@ -495,7 +530,8 @@ main() {
   load_remote_install_defaults
   maybe_oras_login
   select_payload_ref
-  pull_payload "${SELECTED_REF}"
+  finalize_selected_payload_ref
+  pull_payload
 
   log "Verifying compressed payload integrity"
   xz -t "${PAYLOAD_PATH}"
@@ -566,11 +602,13 @@ main() {
     umount "${SYS_BOOT_MP}" >/dev/null 2>&1 || true
   fi
 
-  mount "${sys_disk}p1" "${SYS_BOOT_MP}"
+  mount "$(matchbox_partition_path "${sys_disk}" 1)" "${SYS_BOOT_MP}"
   printf '%s:%s\n' "${username}" "${passhash}" > "${SYS_BOOT_MP}/userconf.txt"
   sync
   umount "${SYS_BOOT_MP}"
   log "userconf written"
+
+  write_install_provenance "${sys_disk}"
 
   teardown_installer_ssh
 
