@@ -1,3 +1,11 @@
+## [0.10.3](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.2...v0.10.3) (2026-03-09)
+
+
+### Bug Fixes
+
+* **release:** consume approved upstream inputs ([0e11d55](https://github.com/techofourown/img-ourbox-matchbox/commit/0e11d55d0a1087af29de55dbe1627c03787ab43a))
+* **release:** pull platform contract by digest ([5e52244](https://github.com/techofourown/img-ourbox-matchbox/commit/5e522444d9037784ff03917c46873d111ffd8acb))
+
 ## [0.10.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.1...v0.10.2) (2026-03-08)
 
 
