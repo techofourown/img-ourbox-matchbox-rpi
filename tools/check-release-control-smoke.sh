@@ -59,6 +59,7 @@ case "${cmd}" in
   pull)
     ref="${1:?}"
     if [[ "${ref}" == *":${catalog_tag}" ]]; then
+      echo "manifest not found" >&2
       exit 1
     fi
     echo "unexpected source-artifact pull: ${ref}" >&2

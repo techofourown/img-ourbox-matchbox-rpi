@@ -18,6 +18,7 @@ DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SHORT_SHA_RE = re.compile(r"^[0-9a-f]{12}$")
+SHELL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def fail(message: str) -> "NoReturn":
@@ -52,6 +53,8 @@ def validate_flat_string_map(obj: Any, label: str) -> dict[str, str]:
     for key, value in obj.items():
         if not isinstance(key, str) or not key:
             fail(f"{label} keys must be non-empty strings")
+        if not SHELL_IDENTIFIER_RE.match(key):
+            fail(f"{label} key {key!r} must be a shell-safe identifier")
         if not isinstance(value, str):
             fail(f"{label}.{key} must be a string")
         out[key] = value
@@ -148,9 +151,15 @@ def oras_tag(pinned_ref: str, tag: str) -> None:
     run(["oras", "tag", pinned_ref, tag], check=True)
 
 
-def oras_pull(ref: str, out_dir: str | Path) -> bool:
-    completed = run(["oras", "pull", ref, "-o", str(out_dir)], check=False)
-    return completed.returncode == 0
+def oras_pull(ref: str, out_dir: str | Path) -> subprocess.CompletedProcess[str]:
+    return run(["oras", "pull", ref, "-o", str(out_dir)], check=False)
+
+
+def oras_pull_is_not_found(completed: subprocess.CompletedProcess[str]) -> bool:
+    if completed.returncode == 0:
+        return False
+    message = "\n".join(part for part in (completed.stdout, completed.stderr) if part).lower()
+    return any(token in message for token in ("not found", "manifest unknown", "name unknown", "no such manifest"))
 
 
 def oras_push_catalog(catalog_ref: str, catalog_artifact_type: str, catalog_dir: str | Path) -> None:
@@ -365,10 +374,14 @@ def update_catalog_from_record(
     with tempfile.TemporaryDirectory(prefix="release-control-catalog-") as tmpdir:
         catalog_dir = Path(tmpdir)
         catalog_ref = f"{artifact_repo}:{catalog_tag}"
-        if oras_pull(catalog_ref, catalog_dir):
+        pull_result = oras_pull(catalog_ref, catalog_dir)
+        if pull_result.returncode == 0:
             catalog_file = find_catalog_file(catalog_dir)
-        else:
+        elif oras_pull_is_not_found(pull_result):
             catalog_file = catalog_dir / "catalog.tsv"
+        else:
+            detail = (pull_result.stderr or pull_result.stdout).strip() or f"exit code {pull_result.returncode}"
+            fail(f"oras pull failed for {catalog_ref}: {detail}")
 
         existing_rows: list[str] = []
         if catalog_file.is_file():
