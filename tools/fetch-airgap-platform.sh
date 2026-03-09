@@ -34,30 +34,50 @@ META_DIR="${ROOT}/artifacts/.airgap-platform-meta"
 
 log "Using airgap platform ref: ${REF}"
 
-# Refuse to overwrite existing artifacts unless operator confirms
-if [[ -d "${OUT}" ]] && find "${OUT}" -mindepth 1 -print -quit >/dev/null 2>&1; then
-  log "ERROR: Existing artifacts detected in ${OUT} (refusing to overwrite)"
-  find "${OUT}" -maxdepth 2 -type f -print | sed 's/^/  /'
-  echo
-  log "You can remove them manually, or allow this script to remove them."
-  read -r -p "Type REMOVE to delete ${OUT} and continue, or anything else to abort: " confirm
-  if [[ "${confirm}" != "REMOVE" ]]; then
-    die "Fetch aborted; existing artifacts not removed"
+# Enforce digest pinning in official builds.
+# Nightly: warn (non-reproducible but permitted for integration coverage).
+# Official candidate/release lanes: hard fail.
+if [[ -n "${GITHUB_ACTIONS:-}" ]] && [[ "${REF}" != *"@sha256:"* ]]; then
+  if [[ "${OURBOX_REQUIRE_PINNED_OFFICIAL_INPUTS:-0}" == "1" ]] || [[ "${GITHUB_WORKFLOW:-}" =~ [Rr]elease ]]; then
+    die "AIRGAP_PLATFORM_REF '${REF}' is not digest-pinned.
+  Official candidate/release builds require @sha256: refs to ensure reproducibility.
+  Update the approved upstream snapshot in sw-ourbox-os instead of editing release/official-inputs.env by hand."
+  elif [[ "${GITHUB_WORKFLOW:-}" =~ [Nn]ightly ]]; then
+    log "WARNING: AIRGAP_PLATFORM_REF is not digest-pinned — nightly build will not be reproducible"
+    log "  Update the approved upstream snapshot in sw-ourbox-os once the next release is approved"
   fi
+fi
 
-  log "WARNING: About to remove ${OUT}"
-  if [[ -w "${OUT}" ]]; then
+# In CI, skip the interactive confirmation and auto-remove stale artifacts.
+# Locally, prompt before removing existing artifacts.
+if [[ -d "${OUT}" ]] && find "${OUT}" -mindepth 1 -print -quit >/dev/null 2>&1; then
+  if [[ -n "${GITHUB_ACTIONS:-}" || "${CI:-}" == "1" ]]; then
+    log "CI mode: removing existing artifacts in ${OUT}"
     rm -rf "${OUT}" || die "Failed to remove ${OUT}"
   else
-    need_cmd sudo
-    sudo rm -rf "${OUT}" || die "Failed to remove ${OUT} (sudo)"
+    log "ERROR: Existing artifacts detected in ${OUT} (refusing to overwrite)"
+    find "${OUT}" -maxdepth 2 -type f -print | sed 's/^/  /'
+    echo
+    log "You can remove them manually, or allow this script to remove them."
+    read -r -p "Type REMOVE to delete ${OUT} and continue, or anything else to abort: " confirm
+    if [[ "${confirm}" != "REMOVE" ]]; then
+      die "Fetch aborted; existing artifacts not removed"
+    fi
+
+    log "WARNING: About to remove ${OUT}"
+    if [[ -w "${OUT}" ]]; then
+      rm -rf "${OUT}" || die "Failed to remove ${OUT}"
+    else
+      need_cmd sudo
+      sudo rm -rf "${OUT}" || die "Failed to remove ${OUT} (sudo)"
+    fi
   fi
 fi
 
 rm -rf "${PULL_DIR}" "${META_DIR}"
 mkdir -p "${PULL_DIR}" "${META_DIR}" "${OUT}"
 
-log "Pulling airgap platform bundle"
+log "Pulling airgap platform bundle (arm64)"
 oras pull "${REF}" -o "${PULL_DIR}" | tee "${META_DIR}/oras.pull.log"
 
 TARBALL="${PULL_DIR}/dist/airgap-platform.tar.gz"

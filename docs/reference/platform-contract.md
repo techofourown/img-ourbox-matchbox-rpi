@@ -10,9 +10,12 @@ this repo.
 
 - `sw-ourbox-os` ADR-0009 (platform contract as OCI artifact)
 - `sw-ourbox-os` artifact docs: https://github.com/techofourown/sw-ourbox-os/blob/main/docs/architecture/artifact-distribution-and-integration.md
-- Pinned refs in this repo:
-  - `contracts/platform-contract.ref` (arch-agnostic contract)
-  - `contracts/airgap-platform.ref` (arch-specific bundle with k3s + images)
+- Approved upstream snapshot in `sw-ourbox-os/release/approved-upstream-inputs.json`
+- Generated lockfile in this repo:
+  - `release/official-inputs.env` (official candidate builds)
+- Legacy fallback refs for local/dev use:
+  - `contracts/platform-contract.ref`
+  - `contracts/airgap-platform.ref`
 
 ---
 
@@ -53,8 +56,8 @@ During build, `ourbox-release` generation records platform contract provenance i
 
 ## Updating pins
 
-1. Publish new `platform-contract` and `airgap-platform` (per arch) from `sw-ourbox-os`.
-2. Update `contracts/platform-contract.ref` and `contracts/airgap-platform.ref` to the new digests.
+1. Approve the new upstream snapshot in `sw-ourbox-os/release/approved-upstream-inputs.json`.
+2. Let the upstream sync workflow open the Matchbox lockfile PR updating `release/official-inputs.env`.
 3. Run `./tools/fetch-airgap-platform.sh` to pull/sync into `pigen/`.
 4. Rebuild images; update release notes/changelog with the new digests.
 
