@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Candidate Provenance",
+  "type": "object",
+  "required": [
+    "schema",
+    "kind",
+    "source_repo",
+    "source_commit",
+    "candidate_workflow",
+    "candidate_run_id",
+    "candidate_run_attempt",
+    "artifacts"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "kind": {
+      "const": "candidate-provenance"
+    },
+    "source_repo": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "candidate_workflow": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_run_attempt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "os",
+        "installer"
+      ],
+      "properties": {
+        "os": {
+          "$ref": "#/$defs/artifact"
+        },
+        "installer": {
+          "$ref": "#/$defs/artifact"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": [
+        "schema",
+        "artifact_role",
+        "artifact_kind",
+        "artifact_type",
+        "artifact_repo",
+        "artifact_ref",
+        "artifact_pinned_ref",
+        "artifact_digest",
+        "payload_filename",
+        "payload_sha256",
+        "payload_size_bytes",
+        "control_fields",
+        "meta_env"
+      ],
+      "properties": {
+        "schema": {
+          "const": 1
+        },
+        "artifact_role": {
+          "type": "string",
+          "enum": [
+            "os",
+            "installer"
+          ]
+        },
+        "artifact_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_pinned_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "payload_filename": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "payload_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "control_fields": {
+          "type": "object",
+          "required": [
+            "version",
+            "variant",
+            "target",
+            "sku",
+            "git_sha"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "variant": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sku": {
+              "type": "string",
+              "minLength": 1
+            },
+            "git_sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{12}$"
+            },
+            "platform_contract_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "k3s_version": {
+              "type": "string"
+            }
+          }
+        },
+        "meta_env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
