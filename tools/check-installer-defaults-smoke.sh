@@ -59,11 +59,33 @@ xz -dc "${IMG_XZ}" > "${RAW_IMG}"
 log "Attaching loop device"
 LOOPDEV="$(${SUDO} losetup --find --show -Pf "${RAW_IMG}")"
 
-mapfile -t ext4_parts < <(${SUDO} lsblk -rno PATH,FSTYPE "${LOOPDEV}" | awk '$2=="ext4" {print $1}')
-(( ${#ext4_parts[@]} > 0 )) || die "no ext4 partitions found in installer image ${IMG_XZ}"
+wait_for_loop_parts() {
+  local deadline=$((SECONDS + 10))
+  local parts=()
 
-for part in "${ext4_parts[@]}"; do
-  ${SUDO} mount -o ro "${part}" "${MOUNT_DIR}"
+  while (( SECONDS < deadline )); do
+    mapfile -t parts < <(${SUDO} lsblk -rno PATH,TYPE "${LOOPDEV}" | awk '$2=="part" {print $1}')
+    if (( ${#parts[@]} > 0 )); then
+      printf '%s\n' "${parts[@]}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  return 1
+}
+
+mapfile -t loop_parts < <(wait_for_loop_parts)
+if (( ${#loop_parts[@]} == 0 )); then
+  ${SUDO} lsblk -rno PATH,TYPE,FSTYPE "${LOOPDEV}" >&2 || true
+  die "no loop partitions found in installer image ${IMG_XZ}"
+fi
+
+for part in "${loop_parts[@]}"; do
+  if ! ${SUDO} mount -o ro "${part}" "${MOUNT_DIR}" >/dev/null 2>&1; then
+    continue
+  fi
+
   if ${SUDO} test -f "${MOUNT_DIR}/opt/ourbox/installer/defaults.env"; then
     ${SUDO} cat "${MOUNT_DIR}/opt/ourbox/installer/defaults.env" > "${EXTRACTED_DEFAULTS}"
     ${SUDO} umount "${MOUNT_DIR}"
@@ -72,7 +94,10 @@ for part in "${ext4_parts[@]}"; do
   ${SUDO} umount "${MOUNT_DIR}"
 done
 
-[[ -f "${EXTRACTED_DEFAULTS}" ]] || die "failed to extract /opt/ourbox/installer/defaults.env from built installer image"
+if [[ ! -f "${EXTRACTED_DEFAULTS}" ]]; then
+  ${SUDO} lsblk -rno PATH,TYPE,FSTYPE "${LOOPDEV}" >&2 || true
+  die "failed to extract /opt/ourbox/installer/defaults.env from built installer image"
+fi
 
 # shellcheck disable=SC1090
 source "${EXTRACTED_DEFAULTS}"
