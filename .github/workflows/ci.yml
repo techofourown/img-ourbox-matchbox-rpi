@@ -73,6 +73,16 @@ jobs:
       - name: Run release-control smoke test
         run: bash tools/check-release-control-smoke.sh
 
+  os-publish-smoke:
+    name: OS publish smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run OS publish smoke test
+        run: bash tools/check-publish-os-artifact-smoke.sh
+
   workflow-safety:
     name: Workflow trust boundary check
     runs-on: ubuntu-latest

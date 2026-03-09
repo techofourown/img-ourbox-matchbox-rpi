@@ -79,6 +79,7 @@ fi
 
 CONTRACT_DIGEST_FILE="${ROOT}/pigen/stages/stage-ourbox-matchbox/02-airgap-platform/files/opt/ourbox/airgap/platform/contract.digest"
 CONTRACT_ENV_FILE="${ROOT}/pigen/stages/stage-ourbox-matchbox/02-airgap-platform/files/opt/ourbox/airgap/platform/contract.env"
+PUBLISH_PLATFORM_CONTRACT_DIGEST_OVERRIDE="${OURBOX_PLATFORM_CONTRACT_DIGEST:-}"
 CONTRACT_DIGEST="$(cat "${CONTRACT_DIGEST_FILE}" 2>/dev/null || echo unknown)"
 if [[ -f "${CONTRACT_ENV_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -96,7 +97,7 @@ GIT_SHA="$(resolve_git_sha)"
 BUILD_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 export BASE SHA256 SIZE_BYTES OS_ARTIFACT_TYPE OURBOX_TARGET OURBOX_VARIANT OURBOX_VERSION OURBOX_SKU BUILD_TS GIT_SHA
-export OURBOX_PLATFORM_CONTRACT_DIGEST="${OURBOX_PLATFORM_CONTRACT_DIGEST:-${CONTRACT_DIGEST}}"
+export OURBOX_PLATFORM_CONTRACT_DIGEST="${PUBLISH_PLATFORM_CONTRACT_DIGEST_OVERRIDE:-${CONTRACT_DIGEST}}"
 export OURBOX_PLATFORM_CONTRACT_SOURCE="${OURBOX_PLATFORM_CONTRACT_SOURCE:-unknown}"
 export OURBOX_PLATFORM_CONTRACT_REVISION="${OURBOX_PLATFORM_CONTRACT_REVISION:-unknown}"
 export OURBOX_PLATFORM_CONTRACT_VERSION="${OURBOX_PLATFORM_CONTRACT_VERSION:-unknown}"
@@ -160,7 +161,7 @@ push_ref() {
     --annotation "techofourown.target=${OURBOX_TARGET}"
     --annotation "techofourown.variant=${OURBOX_VARIANT}"
     --annotation "techofourown.sku=${OURBOX_SKU}"
-    --annotation "techofourown.platform-contract.digest=${CONTRACT_DIGEST}"
+    --annotation "techofourown.platform-contract.digest=${OURBOX_PLATFORM_CONTRACT_DIGEST}"
     --annotation "techofourown.build.workflow=${GITHUB_WORKFLOW:-local}"
     --annotation "techofourown.build.run-id=${GITHUB_RUN_ID:-local}"
     --annotation "techofourown.build.run-attempt=${GITHUB_RUN_ATTEMPT:-1}"
@@ -203,7 +204,7 @@ printf '%s\n' "${OS_REPO}:${OS_IMMUTABLE_TAG}" > "${DEPLOY_DIR}/os-artifact.ref"
 printf '%s\n' "${IMMUTABLE_PINNED_REF}" > "${DEPLOY_DIR}/os-artifact.pinned.ref"
 printf '%s\n' "${IMMUTABLE_DIGEST}" > "${DEPLOY_DIR}/os-artifact.digest"
 
-export OS_REPO OS_IMMUTABLE_TAG IMMUTABLE_PINNED_REF IMMUTABLE_DIGEST OURBOX_ARTIFACT_KIND K3S_VERSION CONTRACT_DIGEST
+export OS_REPO OS_IMMUTABLE_TAG IMMUTABLE_PINNED_REF IMMUTABLE_DIGEST OURBOX_ARTIFACT_KIND K3S_VERSION
 python3 - "${TMP}/os.meta.values.json" "${DEPLOY_DIR}/os-artifact.publish.json" <<'PY'
 import json
 import os
@@ -230,7 +231,7 @@ payload = {
         "target": os.environ["OURBOX_TARGET"],
         "sku": os.environ["OURBOX_SKU"],
         "git_sha": os.environ["GIT_SHA"],
-        "platform_contract_digest": os.environ["CONTRACT_DIGEST"],
+        "platform_contract_digest": os.environ["OURBOX_PLATFORM_CONTRACT_DIGEST"],
         "k3s_version": os.environ["K3S_VERSION"],
     },
     "meta_env": meta_env,
