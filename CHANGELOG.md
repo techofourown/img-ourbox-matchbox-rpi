@@ -1,3 +1,16 @@
+# [0.11.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.3...v0.11.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* align platform contract digest publish metadata ([5772f9d](https://github.com/techofourown/img-ourbox-matchbox/commit/5772f9d878b3674231e8a4a5998cf9928c2e007d))
+* drop vendored release-control bytecode ([bc7b759](https://github.com/techofourown/img-ourbox-matchbox/commit/bc7b759e0249c950d88549495636ec405a82b6ca))
+
+
+### Features
+
+* vendor shared release-control plane ([da3f703](https://github.com/techofourown/img-ourbox-matchbox/commit/da3f70312c54193789bd5017e73b540272b2772f))
+
 ## [0.10.3](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.2...v0.10.3) (2026-03-09)
 
 
