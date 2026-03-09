@@ -1,3 +1,10 @@
+## [0.11.1](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.0...v0.11.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* **smoke:** wait for installer loop partitions ([20f3ed3](https://github.com/techofourown/img-ourbox-matchbox/commit/20f3ed300f1134466d7048881254cad41a7113a1))
+
 # [0.11.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.10.3...v0.11.0) (2026-03-09)
 
 
