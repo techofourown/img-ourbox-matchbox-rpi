@@ -169,18 +169,10 @@ These MUST be digest-pinned refs (never floating tags).
 The scheduled nightly integration build intentionally overrides those pins at workflow time by
 resolving the latest upstream `edge` digests before building.
 
-To update when `sw-ourbox-os` ships a new bundle:
-
-```bash
-# Re-resolve current digests
-oras resolve ghcr.io/techofourown/sw-ourbox-os/platform-contract:edge
-oras resolve ghcr.io/techofourown/sw-ourbox-os/airgap-platform:edge-arm64
-
-# Update release/official-inputs.env with new digests, open a PR
-```
-
-The update must go through a PR so that the pinned refs are reviewed and the next candidate build
-publishes a new promotable beta artifact.
+`release/official-inputs.env` is now a generated downstream lockfile. The approval point lives in
+`sw-ourbox-os/release/approved-upstream-inputs.json`, and the Matchbox lockfile is refreshed from
+that approved snapshot rather than hand-edited here. The next candidate build therefore stays
+digest-pinned while tracking a single upstream approval record instead of a repo-local copy.
 
 ---
 
@@ -213,4 +205,4 @@ TOOO-controlled publication are not official TOOO artifacts.
 - [ADR-0004: Consume Platform Contract from sw-ourbox-os](./decisions/ADR-0004-consume-platform-contract-from-sw-ourbox-os.md)
 - [OPS.md — Operator Runbook](./OPS.md)
 - `release/official-artifacts.env` — official publication targets
-- `release/official-inputs.env` — digest-pinned upstream refs
+- `release/official-inputs.env` — generated digest-pinned upstream lockfile

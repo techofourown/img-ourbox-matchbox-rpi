@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "${ROOT}/tools/lib.sh"
 
 # Resolve platform contract ref.
 # Priority: OURBOX_PLATFORM_CONTRACT_REF env var > release/official-inputs.env > contracts/ (legacy fallback)
@@ -12,20 +14,17 @@ else
   if [[ -f "${INPUTS_ENV}" ]]; then
     # shellcheck disable=SC1090
     source "${INPUTS_ENV}"
-    [[ -n "${PLATFORM_CONTRACT_REF:-}" ]] || { echo "PLATFORM_CONTRACT_REF not set in ${INPUTS_ENV}" >&2; exit 1; }
+    [[ -n "${PLATFORM_CONTRACT_REF:-}" ]] || die "PLATFORM_CONTRACT_REF not set in ${INPUTS_ENV}"
     REF="${PLATFORM_CONTRACT_REF}"
   else
     # Legacy fallback: contracts/platform-contract.ref (deprecated — use release/official-inputs.env)
     REF_FILE="${ROOT}/contracts/platform-contract.ref"
-    [[ -f "${REF_FILE}" ]] || { echo "Missing ${INPUTS_ENV} and no legacy ${REF_FILE} found" >&2; exit 1; }
+    [[ -f "${REF_FILE}" ]] || die "Missing ${INPUTS_ENV} and no legacy ${REF_FILE} found"
     REF="$(cat "${REF_FILE}")"
   fi
 fi
 
-command -v oras >/dev/null 2>&1 || {
-  echo "oras is required. Run ./tools/bootstrap-host.sh or install ORAS v${ORAS_VERSION:-1.3.0}." >&2
-  exit 1
-}
+need_cmd oras
 
 OUT_BASE="${ROOT}/artifacts/platform-contract"
 PULL_DIR="${OUT_BASE}/pull"
@@ -35,13 +34,51 @@ META_DIR="${OUT_BASE}/meta"
 rm -rf "${PULL_DIR}" "${EXTRACT_DIR}" "${META_DIR}"
 mkdir -p "${PULL_DIR}" "${EXTRACT_DIR}" "${META_DIR}"
 
-echo "Pulling platform contract:"
-echo "  ${REF}"
+log "Pulling platform contract:"
+log "  ${REF}"
 
-oras pull "${REF}" -o "${PULL_DIR}" | tee "${META_DIR}/oras.pull.log"
+if [[ -n "${GITHUB_ACTIONS:-}" ]] && [[ "${REF}" != *"@sha256:"* ]]; then
+  if [[ "${OURBOX_REQUIRE_PINNED_OFFICIAL_INPUTS:-0}" == "1" ]] || [[ "${GITHUB_WORKFLOW:-}" =~ [Rr]elease ]]; then
+    die "PLATFORM_CONTRACT_REF '${REF}' is not digest-pinned.
+  Official candidate/release builds require @sha256: refs to ensure reproducibility.
+  Update the approved upstream snapshot in sw-ourbox-os instead of editing release/official-inputs.env by hand."
+  elif [[ "${GITHUB_WORKFLOW:-}" =~ [Nn]ightly ]]; then
+    log "WARNING: PLATFORM_CONTRACT_REF is not digest-pinned — nightly build will not be reproducible"
+    log "  Update the approved upstream snapshot in sw-ourbox-os once the next release is approved"
+  fi
+fi
 
-# Capture resolved digest for traceability when using a tag (e.g., edge)
-RESOLVED_DIGEST="$(grep -Eo 'sha256:[0-9a-f]{64}' "${META_DIR}/oras.pull.log" | tail -n1 || true)"
+RESOLVED_DIGEST=""
+if [[ "${REF}" =~ @sha256:[0-9a-f]{64}$ ]]; then
+  RESOLVED_DIGEST="${REF##*@}"
+else
+  log "Resolving digest for ${REF}"
+  set +e
+  RESOLVED_DIGEST="$(oras resolve "${REF}" 2>/dev/null)"
+  resolve_status=$?
+  set -e
+  if [[ "${resolve_status}" -ne 0 || ! "${RESOLVED_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    log "WARNING: oras resolve failed; digest will not be captured"
+    RESOLVED_DIGEST=""
+  else
+    log "Resolved: ${RESOLVED_DIGEST}"
+  fi
+fi
+
+PULL_REF="${REF}"
+if [[ -n "${RESOLVED_DIGEST}" ]] && [[ "${REF}" != *"@sha256:"* ]]; then
+  repo_prefix="${REF%/*}"
+  ref_leaf="${REF##*/}"
+  repo_leaf="${ref_leaf%%:*}"
+  if [[ "${repo_leaf}" != "${ref_leaf}" ]]; then
+    PULL_REF="${repo_prefix}/${repo_leaf}@${RESOLVED_DIGEST}"
+    log "Pulling by resolved digest: ${PULL_REF}"
+  else
+    log "WARNING: could not derive immutable pull ref from ${REF}; pulling original ref"
+  fi
+fi
+
+oras pull "${PULL_REF}" -o "${PULL_DIR}" | tee "${META_DIR}/oras.pull.log"
 
 TARBALL="${PULL_DIR}/dist/platform-contract.tar.gz"
 if [[ ! -f "${TARBALL}" ]]; then
@@ -61,6 +98,9 @@ tar -xzf "${TARBALL}" -C "${EXTRACT_DIR}"
 
 if [[ -n "${RESOLVED_DIGEST}" ]]; then
   printf '%s\n' "${RESOLVED_DIGEST}" > "${EXTRACT_DIR}/platform-contract/contract.digest"
+  log "Digest recorded: ${RESOLVED_DIGEST}"
+else
+  log "WARNING: no digest captured; contract.digest will not be written"
 fi
 
-echo "OK: extracted to ${EXTRACT_DIR}/platform-contract"
+log "OK: extracted to ${EXTRACT_DIR}/platform-contract"

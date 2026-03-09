@@ -42,6 +42,8 @@ jobs:
 
       - name: Fetch curated upstream inputs
         run: ./tools/fetch-airgap-platform.sh
+        env:
+          OURBOX_REQUIRE_PINNED_OFFICIAL_INPUTS: "1"
 
       - name: Build OS image
         run: sudo -E ./tools/build-image.sh
