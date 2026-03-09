@@ -30,11 +30,16 @@ jobs:
         run: sudo apt-get install -y --no-install-recommends shellcheck
 
       - name: Run shellcheck on build/publish scripts
-        run: shellcheck tools/*.sh
+        run: |
+          shellcheck tools/*.sh
+          shellcheck tools/release-control/*.sh
 
       - name: Check shell syntax (bash -n)
         run: |
           for f in tools/*.sh; do
+            bash -n "${f}" && echo "OK: ${f}"
+          done
+          for f in tools/release-control/*.sh; do
             bash -n "${f}" && echo "OK: ${f}"
           done
 
@@ -47,6 +52,26 @@ jobs:
 
       - name: Verify vendored installer-selection resolver
         run: bash tools/check-vendored-installer-selection-resolver.sh
+
+  release-control-vendoring:
+    name: Vendored release-control sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify vendored release-control module
+        run: bash tools/check-vendored-release-control.sh
+
+  release-control-smoke:
+    name: Release-control smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run release-control smoke test
+        run: bash tools/check-release-control-smoke.sh
 
   workflow-safety:
     name: Workflow trust boundary check

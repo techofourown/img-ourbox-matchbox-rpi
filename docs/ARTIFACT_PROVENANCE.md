@@ -143,6 +143,7 @@ Every published artifact carries the following provenance in its OCI annotations
 Additional metadata is published as artifact files:
 
 - `os.meta.env` / `installer.meta.env` — full provenance record including K3S version, upstream contract source/revision/version/digest, image SHA-256, and size
+- `os.meta.json` / `installer.meta.json` — JSON form of the same flat metadata map for machine-readable consumption
 - `os.img.xz.sha256` / `installer.img.xz.sha256` — SHA-256 checksum for offline verification
 - `os.info` / `installer.info` — pi-gen build info (if present)
 
@@ -151,6 +152,12 @@ Canonical artifact identity for consumption is **by digest** (e.g., `ghcr.io/tec
 Promotion workflows do not rewrite the artifact payload or its embedded metadata. Stable and
 exp-labs semantics live in the promoted tags and catalog rows; the underlying artifact keeps the
 channel-neutral build identity from the heavy publish lane.
+
+Candidate workflows now emit `candidate-provenance.json` as the authoritative workflow handoff.
+Stable and exp-labs promotion consumes that provenance bundle only, reconstructs `meta.env` /
+`meta.json` outputs from it, and does not pull source artifact metadata sidecars during promotion.
+Promotion also writes `os-artifact.promote.json` and `installer-artifact.promote.json` as the
+workflow provenance record for the retag operation.
 
 ---
 

@@ -55,77 +55,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_IS_DRAFT: ${{ github.event.release.draft }}
+          RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease }}
           PROMOTION_CONTEXT: exp-labs
           CANDIDATE_WORKFLOW_NAME: Official Candidate Build & Publish (Matchbox)
-        run: |
-          set -euo pipefail
-
-          resolve_source_commit() {
-            local release_ref="$1"
-            local commit subject
-
-            commit="$(git rev-parse "${release_ref}^{commit}" 2>/dev/null)" \
-              || {
-                echo "Unable to resolve commit for release ref ${release_ref}" >&2
-                exit 1
-              }
-            subject="$(git log -1 --format=%s "${commit}" 2>/dev/null || true)"
-
-            if [[ "${subject}" == chore\(release\):* ]]; then
-              git rev-parse "${commit}^" 2>/dev/null \
-                || {
-                  echo "Unable to resolve source commit behind release commit ${commit}" >&2
-                  exit 1
-                }
-            else
-              printf '%s\n' "${commit}"
-            fi
-          }
-
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
-            source_commit="${{ github.event.workflow_run.head_sha }}"
-            candidate_run_id="${{ github.event.workflow_run.id }}"
-            if release_tag="$(./tools/resolve-promotable-release.sh "${PROMOTION_CONTEXT}" "${source_commit}")"; then
-              :
-            else
-              status=$?
-              if [[ "${status}" -eq 3 ]]; then
-                echo "No prerelease exp-labs authorization yet for source commit ${source_commit}; skipping."
-                echo "skip=true" >> "${GITHUB_OUTPUT}"
-                exit 0
-              fi
-              exit "${status}"
-            fi
-          elif [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
-            if [[ "${{ github.event.release.draft }}" == "true" || "${{ github.event.release.prerelease }}" != "true" ]]; then
-              echo "Release ${GITHUB_REF_NAME} is not an exp-labs authorization; skipping."
-              echo "skip=true" >> "${GITHUB_OUTPUT}"
-              exit 0
-            fi
-
-            release_tag="${{ github.event.release.tag_name }}"
-            source_commit="$(resolve_source_commit "refs/tags/${release_tag}")"
-
-            if candidate_run_id="$(./tools/find-successful-candidate-run.sh "${CANDIDATE_WORKFLOW_NAME}" "${source_commit}")"; then
-              :
-            else
-              status=$?
-              if [[ "${status}" -eq 3 ]]; then
-                echo "No successful candidate run yet for source commit ${source_commit}; skipping."
-                echo "skip=true" >> "${GITHUB_OUTPUT}"
-                exit 0
-              fi
-              exit "${status}"
-            fi
-          else
-            echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
-            exit 1
-          fi
-
-          echo "skip=false" >> "${GITHUB_OUTPUT}"
-          echo "source_commit=${source_commit}" >> "${GITHUB_OUTPUT}"
-          echo "candidate_run_id=${candidate_run_id}" >> "${GITHUB_OUTPUT}"
-          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+        run: ./tools/release-control/resolve-promotion-context.sh "${PROMOTION_CONTEXT}" "${CANDIDATE_WORKFLOW_NAME}" "${GITHUB_OUTPUT}"
 
       - name: Download candidate provenance
         if: steps.context.outputs.skip != 'true'
@@ -136,41 +73,38 @@ jobs:
           run-id: ${{ steps.context.outputs.candidate_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Load candidate provenance inputs
+      - name: Locate candidate provenance
         if: steps.context.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          find_file() {
-            local name="$1"
-            local file
-            file="$(find deploy/candidate-provenance -type f -name "${name}" | head -n1 || true)"
-            [[ -n "${file}" ]] || {
-              echo "Missing ${name} in downloaded candidate provenance" >&2
-              exit 1
-            }
-            cat "${file}"
+          file="$(find deploy/candidate-provenance -type f -name 'candidate-provenance.json' | head -n1 || true)"
+          [[ -n "${file}" ]] || {
+            echo "Missing candidate-provenance.json in downloaded candidate provenance artifact" >&2
+            exit 1
           }
+          printf 'CANDIDATE_PROVENANCE_JSON=%s\n' "${file}" >> "${GITHUB_ENV}"
           printf 'RELEASE_TAG=%s\n' "${{ steps.context.outputs.release_tag }}" >> "${GITHUB_ENV}"
-          printf 'OS_SOURCE_REF=%s\n' "$(find_file os-artifact.ref)" >> "${GITHUB_ENV}"
-          printf 'OS_SOURCE_PINNED_REF=%s\n' "$(find_file os-artifact.pinned.ref)" >> "${GITHUB_ENV}"
-          printf 'INSTALLER_SOURCE_REF=%s\n' "$(find_file installer-artifact.ref)" >> "${GITHUB_ENV}"
-          printf 'INSTALLER_SOURCE_PINNED_REF=%s\n' "$(find_file installer-artifact.pinned.ref)" >> "${GITHUB_ENV}"
+
+      - name: Validate candidate provenance
+        if: steps.context.outputs.skip != 'true'
+        run: |
+          python3 ./tools/release-control/release_control.py validate-candidate-provenance \
+            --input "${CANDIDATE_PROVENANCE_JSON}" \
+            --expected-source-commit "${{ steps.context.outputs.source_commit }}"
 
       - name: Promote OS artifact to exp-labs
         if: steps.context.outputs.skip != 'true'
         run: ./tools/promote-os-artifact-official.sh exp-labs
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
-          PROMOTE_SOURCE_REF: ${{ env.OS_SOURCE_REF }}
-          PROMOTE_SOURCE_PINNED_REF: ${{ env.OS_SOURCE_PINNED_REF }}
+          CANDIDATE_PROVENANCE_JSON: ${{ env.CANDIDATE_PROVENANCE_JSON }}
 
       - name: Promote installer artifact to exp-labs
         if: steps.context.outputs.skip != 'true'
         run: ./tools/promote-installer-artifact-official.sh exp-labs
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
-          PROMOTE_SOURCE_REF: ${{ env.INSTALLER_SOURCE_REF }}
-          PROMOTE_SOURCE_PINNED_REF: ${{ env.INSTALLER_SOURCE_PINNED_REF }}
+          CANDIDATE_PROVENANCE_JSON: ${{ env.CANDIDATE_PROVENANCE_JSON }}
 
       - name: Upload provenance outputs
         uses: actions/upload-artifact@v4
@@ -182,10 +116,14 @@ jobs:
             deploy/os-artifact.pinned.ref
             deploy/os-artifact.digest
             deploy/os-artifact.meta.env
+            deploy/os-artifact.meta.json
             deploy/os-artifact.promote.source.ref
+            deploy/os-artifact.promote.json
             deploy/installer-artifact.ref
             deploy/installer-artifact.pinned.ref
             deploy/installer-artifact.digest
             deploy/installer-artifact.meta.env
+            deploy/installer-artifact.meta.json
             deploy/installer-artifact.promote.source.ref
-          if-no-files-found: warn
+            deploy/installer-artifact.promote.json
+          if-no-files-found: error

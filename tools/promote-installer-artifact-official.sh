@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Official installer artifact promotion wrapper.
-# Re-tags an already-published immutable artifact into a promoted channel.
+# Metadata outputs remain channel-neutral candidate-build metadata; release semantics
+# live in tags and installer-artifact.promote.json.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,25 +10,16 @@ source "${ROOT}/tools/lib.sh"
 # shellcheck disable=SC1091
 source "${ROOT}/release/official-artifacts.env"
 
-need_cmd oras
+need_cmd python3
 
 PROMOTION_CONTEXT="${1:?Usage: promote-installer-artifact-official.sh stable|exp-labs}"
-DEPLOY_DIR="${ROOT}/deploy"
+DEPLOY_DIR="${DEPLOY_DIR:-${ROOT}/deploy}"
 mkdir -p "${DEPLOY_DIR}"
 
 RELEASE_TAG="${RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
 [[ -n "${RELEASE_TAG}" ]] || die "release tag not set (RELEASE_TAG and GITHUB_REF_NAME are both empty)"
-PROMOTE_SOURCE_PINNED_REF="${PROMOTE_SOURCE_PINNED_REF:-}"
-[[ -n "${PROMOTE_SOURCE_PINNED_REF}" ]] || die "PROMOTE_SOURCE_PINNED_REF must point to the candidate pinned ref"
-PROMOTE_SOURCE_REF="${PROMOTE_SOURCE_REF:-${PROMOTE_SOURCE_PINNED_REF}}"
-
-SOURCE_REPO="${PROMOTE_SOURCE_PINNED_REF%@*}"
-IMMUTABLE_DIGEST="${PROMOTE_SOURCE_PINNED_REF##*@}"
-[[ "${SOURCE_REPO}" == "${OFFICIAL_INSTALLER_REPO}" ]] \
-  || die "PROMOTE_SOURCE_PINNED_REF repo mismatch: expected ${OFFICIAL_INSTALLER_REPO}, got ${SOURCE_REPO}"
-[[ "${IMMUTABLE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] \
-  || die "PROMOTE_SOURCE_PINNED_REF must contain a digest-pinned ref"
-IMMUTABLE_PINNED_REF="${SOURCE_REPO}@${IMMUTABLE_DIGEST}"
+CANDIDATE_PROVENANCE_JSON="${CANDIDATE_PROVENANCE_JSON:-}"
+[[ -n "${CANDIDATE_PROVENANCE_JSON}" ]] || die "CANDIDATE_PROVENANCE_JSON must point to the candidate provenance bundle"
 
 case "${PROMOTION_CONTEXT}" in
   stable)
@@ -44,30 +36,17 @@ case "${PROMOTION_CONTEXT}" in
 esac
 
 TARGET_IMMUTABLE_TAG="${PROMOTE_VERSION}-${OURBOX_TARGET}-installer"
-SOURCE_REF="${PROMOTE_SOURCE_REF}"
-TMP="$(mktemp -d)"
-trap 'rm -rf "${TMP}"' EXIT
 
-existing_target_digest="$(oras resolve "${OFFICIAL_INSTALLER_REPO}:${TARGET_IMMUTABLE_TAG}" 2>/dev/null || true)"
-if [[ -n "${existing_target_digest}" && "${existing_target_digest}" != "${IMMUTABLE_DIGEST}" ]]; then
-  die "Target immutable tag ${OFFICIAL_INSTALLER_REPO}:${TARGET_IMMUTABLE_TAG} already points to ${existing_target_digest}, not ${IMMUTABLE_DIGEST}"
-fi
-
-log "Pulling source installer metadata"
-oras pull "${IMMUTABLE_PINNED_REF}" -o "${TMP}/source" >/dev/null
-META_FILE="${TMP}/source/installer.meta.env"
-[[ -f "${META_FILE}" ]] || die "Source artifact ${IMMUTABLE_PINNED_REF} missing installer.meta.env"
-
-log "Promoting ${IMMUTABLE_PINNED_REF} -> ${TARGET_IMMUTABLE_TAG} (${TARGET_CHANNEL_TAGS})"
-oras tag "${IMMUTABLE_PINNED_REF}" "${TARGET_IMMUTABLE_TAG}" >/dev/null
-for ch in ${TARGET_CHANNEL_TAGS}; do
-  oras tag "${IMMUTABLE_PINNED_REF}" "${ch}" >/dev/null
-done
-
-printf '%s\n' "${OFFICIAL_INSTALLER_REPO}:${TARGET_IMMUTABLE_TAG}" > "${DEPLOY_DIR}/installer-artifact.ref"
-printf '%s\n' "${IMMUTABLE_PINNED_REF}" > "${DEPLOY_DIR}/installer-artifact.pinned.ref"
-printf '%s\n' "${IMMUTABLE_DIGEST}" > "${DEPLOY_DIR}/installer-artifact.digest"
-printf '%s\n' "${SOURCE_REF}" > "${DEPLOY_DIR}/installer-artifact.promote.source.ref"
-cp "${META_FILE}" "${DEPLOY_DIR}/installer-artifact.meta.env"
-
-log "Official installer promote: context=${PROMOTION_CONTEXT} version=${PROMOTE_VERSION} source=${SOURCE_REF} digest=${IMMUTABLE_DIGEST}"
+python3 "${ROOT}/tools/release-control/release_control.py" promote-installer \
+  --provenance "${CANDIDATE_PROVENANCE_JSON}" \
+  --release-tag "${RELEASE_TAG}" \
+  --promotion-context "${PROMOTION_CONTEXT}" \
+  --artifact-repo "${OFFICIAL_INSTALLER_REPO}" \
+  --expected-artifact-kind "${OFFICIAL_INSTALLER_ARTIFACT_KIND}" \
+  --expected-artifact-type "${OFFICIAL_INSTALLER_ARTIFACT_TYPE}" \
+  --expected-target "${OURBOX_TARGET}" \
+  --expected-variant "${OURBOX_VARIANT}" \
+  --expected-sku "${OURBOX_SKU}" \
+  --immutable-tag "${TARGET_IMMUTABLE_TAG}" \
+  --channel-tags "${TARGET_CHANNEL_TAGS}" \
+  --deploy-dir "${DEPLOY_DIR}"

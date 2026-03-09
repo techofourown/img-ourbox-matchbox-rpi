@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "kind": "candidate-provenance",
+  "source_repo": "https://github.com/techofourown/img-ourbox-matchbox",
+  "source_commit": "2def83dc4250b1c2d3e4f567890123456789abcd",
+  "candidate_workflow": "Official Candidate Build & Publish (Matchbox)",
+  "candidate_run_id": "22837315282",
+  "candidate_run_attempt": "1",
+  "artifacts": {
+    "os": {
+      "schema": 1,
+      "artifact_role": "os",
+      "artifact_kind": "os-image",
+      "artifact_type": "application/vnd.techofourown.ourbox.matchbox.os-image.v1",
+      "artifact_repo": "ghcr.io/techofourown/ourbox-matchbox-os",
+      "artifact_ref": "ghcr.io/techofourown/ourbox-matchbox-os:main-2def83dc4250-rpi",
+      "artifact_pinned_ref": "ghcr.io/techofourown/ourbox-matchbox-os@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "artifact_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "payload_filename": "os.img.xz",
+      "payload_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "payload_size_bytes": 925680536,
+      "control_fields": {
+        "version": "main-2def83dc4250",
+        "variant": "prod",
+        "target": "rpi",
+        "sku": "TOO-OBX-MBX-BASE-001",
+        "git_sha": "2def83dc4250",
+        "platform_contract_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "k3s_version": "v1.35.0+k3s1"
+      },
+      "meta_env": {
+        "OS_IMAGE_BASENAME": "img-ourbox-matchbox-rpi-too-obx-mbx-base-001-prod-main-2def83dc4250",
+        "OS_IMAGE_SHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "OS_IMAGE_SIZE_BYTES": "925680536",
+        "OS_ARTIFACT_TYPE": "application/vnd.techofourown.ourbox.matchbox.os-image.v1",
+        "OURBOX_TARGET": "rpi",
+        "OURBOX_VARIANT": "prod",
+        "OURBOX_VERSION": "main-2def83dc4250",
+        "OURBOX_SKU": "TOO-OBX-MBX-BASE-001",
+        "BUILD_TS": "2026-03-09T04:40:10Z",
+        "GIT_SHA": "2def83dc4250",
+        "OURBOX_PLATFORM_CONTRACT_DIGEST": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "OURBOX_PLATFORM_CONTRACT_SOURCE": "https://github.com/techofourown/sw-ourbox-os",
+        "OURBOX_PLATFORM_CONTRACT_REVISION": "93e087a671428ee9e87688d039a8715abea735a7",
+        "OURBOX_PLATFORM_CONTRACT_VERSION": "v0.10.1",
+        "OURBOX_PLATFORM_CONTRACT_CREATED": "2026-03-08T14:00:05Z",
+        "K3S_VERSION": "v1.35.0+k3s1",
+        "GITHUB_WORKFLOW": "Official Candidate Build & Publish (Matchbox)",
+        "GITHUB_RUN_ID": "22837315282",
+        "GITHUB_RUN_ATTEMPT": "1"
+      }
+    },
+    "installer": {
+      "schema": 1,
+      "artifact_role": "installer",
+      "artifact_kind": "installer-image",
+      "artifact_type": "application/vnd.techofourown.ourbox.matchbox.installer-image.v1",
+      "artifact_repo": "ghcr.io/techofourown/ourbox-matchbox-installer",
+      "artifact_ref": "ghcr.io/techofourown/ourbox-matchbox-installer:main-2def83dc4250-rpi-installer",
+      "artifact_pinned_ref": "ghcr.io/techofourown/ourbox-matchbox-installer@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "artifact_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "payload_filename": "installer.img.xz",
+      "payload_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "payload_size_bytes": 123456789,
+      "control_fields": {
+        "version": "main-2def83dc4250",
+        "variant": "prod",
+        "target": "rpi",
+        "sku": "TOO-OBX-MBX-BASE-001",
+        "git_sha": "2def83dc4250"
+      },
+      "meta_env": {
+        "INSTALLER_IMAGE_BASENAME": "installer-ourbox-matchbox-rpi-too-obx-mbx-base-001-prod-main-2def83dc4250",
+        "INSTALLER_IMAGE_SHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "INSTALLER_IMAGE_SIZE_BYTES": "123456789",
+        "INSTALLER_ARTIFACT_TYPE": "application/vnd.techofourown.ourbox.matchbox.installer-image.v1",
+        "OURBOX_TARGET": "rpi",
+        "OURBOX_VARIANT": "prod",
+        "OURBOX_VERSION": "main-2def83dc4250",
+        "OURBOX_SKU": "TOO-OBX-MBX-BASE-001",
+        "BUILD_TS": "2026-03-09T05:27:45Z",
+        "GIT_SHA": "2def83dc4250",
+        "GITHUB_WORKFLOW": "Official Candidate Build & Publish (Matchbox)",
+        "GITHUB_RUN_ID": "22837315282",
+        "GITHUB_RUN_ATTEMPT": "1"
+      }
+    }
+  }
+}

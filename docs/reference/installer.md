@@ -22,12 +22,12 @@ Key variables:
 - `OS_REGISTRY_USERNAME` / `OS_REGISTRY_PASSWORD` (optional for private repos)
 
 ## Artifact contract (oras pull)
-- Type: `application/vnd.ourbox.matchbox.os-image.v1`
+- Type: `application/vnd.techofourown.ourbox.matchbox.os-image.v1`
 - Required files:
   - `os.img.xz`
   - `os.img.xz.sha256` (first field is the digest; required, install fails if missing/invalid)
   - `os.meta.env` (KEY=VALUE; include version/target/sku/k3s/git sha + platform contract digest)
-- Optional: `os.info`, `build.log`
+- Optional: `os.meta.json`, `os.info`, `build.log`
 
 ## Runtime UX
 - Shared selection policy is sourced from `/opt/ourbox/tools/installer-selection-resolver.sh`, the
@@ -67,6 +67,7 @@ Key variables:
 - Stable builds are a promotion of that already-published candidate digest once both candidate success and a matching published GitHub Release are present; they are not rebuilt on release.
 - Scheduled nightly integration builds resolve the latest `sw-ourbox-os` `edge` platform bundle digests at workflow time and publish the `nightly` lane.
 - GitHub prereleases authorize promotion of the same candidate digest into `exp-labs`, and either the candidate or the prerelease event may wake that promotion after the other condition already exists.
+- Promotion is driven by `candidate-provenance.json`; it does not use artifact-carried `.env` sidecars as promotion control-plane inputs.
 
 ## Catalog TSV
 - Tag: `${OS_TARGET}-catalog`

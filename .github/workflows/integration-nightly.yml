@@ -98,10 +98,14 @@ jobs:
             deploy/os-artifact.pinned.ref
             deploy/os-artifact.digest
             deploy/os-artifact.meta.env
+            deploy/os-artifact.meta.json
+            deploy/os-artifact.publish.json
             deploy/installer-artifact.ref
             deploy/installer-artifact.pinned.ref
             deploy/installer-artifact.digest
             deploy/installer-artifact.meta.env
+            deploy/installer-artifact.meta.json
+            deploy/installer-artifact.publish.json
             deploy/installer-defaults.extracted.env
             deploy/installer-defaults-smoke.txt
-          if-no-files-found: warn
+          if-no-files-found: error

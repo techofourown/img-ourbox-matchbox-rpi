@@ -86,6 +86,24 @@ jobs:
       - name: Publish installer artifact (official beta)
         run: ./tools/publish-installer-artifact-official.sh beta
 
+      - name: Build candidate provenance bundle
+        run: |
+          python3 ./tools/release-control/release_control.py build-candidate-provenance \
+            --source-repo-url "https://github.com/${GITHUB_REPOSITORY}" \
+            --source-commit "${GITHUB_SHA}" \
+            --candidate-workflow "${GITHUB_WORKFLOW}" \
+            --candidate-run-id "${GITHUB_RUN_ID}" \
+            --candidate-run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --os-record deploy/os-artifact.publish.json \
+            --installer-record deploy/installer-artifact.publish.json \
+            --output deploy/candidate-provenance.json
+
+      - name: Validate candidate provenance bundle
+        run: |
+          python3 ./tools/release-control/release_control.py validate-candidate-provenance \
+            --input deploy/candidate-provenance.json \
+            --expected-source-commit "${GITHUB_SHA}"
+
       - name: Upload provenance outputs
         uses: actions/upload-artifact@v4
         if: always()
@@ -96,10 +114,15 @@ jobs:
             deploy/os-artifact.pinned.ref
             deploy/os-artifact.digest
             deploy/os-artifact.meta.env
+            deploy/os-artifact.meta.json
+            deploy/os-artifact.publish.json
             deploy/installer-artifact.ref
             deploy/installer-artifact.pinned.ref
             deploy/installer-artifact.digest
             deploy/installer-artifact.meta.env
+            deploy/installer-artifact.meta.json
+            deploy/installer-artifact.publish.json
+            deploy/candidate-provenance.json
             deploy/installer-defaults.extracted.env
             deploy/installer-defaults-smoke.txt
-          if-no-files-found: warn
+          if-no-files-found: error
