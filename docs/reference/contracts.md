@@ -119,8 +119,9 @@ Installer media contains the runtime installer and fetches the OS payload at ins
 
 - Entrypoint: `/opt/ourbox/tools/ourbox-install`
 - Shared resolver policy: `/opt/ourbox/tools/installer-selection-resolver.sh`
+- Shared installer SSH policy helper: `/opt/ourbox/tools/installer-ssh-helper.sh`
 - Defaults: `/opt/ourbox/installer/defaults.env`
-- Optional override (on boot media): `/boot/firmware/ourbox-installer.env`
+- Optional override (on boot media, for runtime payload-selection controls): `/boot/firmware/ourbox-installer.env`
 - Payload/cache path: `/opt/ourbox/installer/cache/payload`
 - Required payload artifact files (oras pull):
   - `os.img.xz`
@@ -130,6 +131,10 @@ Installer media contains the runtime installer and fetches the OS payload at ins
 - Optional catalog artifact `${OS_TARGET}-catalog` with `catalog.tsv` for interactive version selection.
 - After flashing, installer-selected payload provenance is appended directly to `/etc/ourbox/release`
   on the installed root filesystem.
+- Installer SSH policy is baked at image-build time and realized through the upstream installer SSH
+  contract. Boot-media runtime overrides do not apply to `OURBOX_INSTALLER_SSH_*` knobs.
+- Official/public Matchbox media uses `OURBOX_INSTALLER_SSH_MODE=off`.
+- SSH-enabled support/lab media is explicit opt-in only and must provide build-time auth material.
 
 ## Contract: Platform runtime (k3s)
 

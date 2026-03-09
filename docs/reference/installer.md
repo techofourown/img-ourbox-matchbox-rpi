@@ -34,9 +34,14 @@ Key variables:
   upstream reference resolver defined in `sw-ourbox-os`.
 - The vendored resolver copy is checked in CI against the upstream revision recorded in
   `tools/installer-selection-resolver.upstream.env`.
+- Shared installer SSH policy is sourced from `/opt/ourbox/tools/installer-ssh-helper.sh`, the
+  upstream reference helper and contract defined in `sw-ourbox-os`.
+- The vendored installer SSH helper copy is checked in CI against the upstream revision recorded in
+  `tools/installer-ssh-helper.upstream.env`.
 - Installer loads baked defaults, then attempts to pull `${INSTALL_DEFAULTS_REF}` and apply `defaults/${INSTALLER_ID}.env`.
 - If remote defaults pull fails, installer falls back to baked defaults.
-- Boot-media override (`/boot/firmware/ourbox-installer.env`) is applied last and wins.
+- Boot-media override (`/boot/firmware/ourbox-installer.env`) is applied last and wins for runtime
+  payload-selection controls. It does not override installer SSH policy.
 - A non-empty baked `OS_DEFAULT_REF` remains in force unless remote install-defaults explicitly replaces it with another non-empty ref.
 - Installer shows both NVMe disks and requires an explicit SYSTEM-disk choice; the other NVMe becomes DATA for that install.
 - If the chosen SYSTEM disk currently carries `LABEL=OURBOX_DATA`, installer requires an explicit repurpose confirmation before clearing that label and continuing.
@@ -60,9 +65,24 @@ Key variables:
 - After flashing, the installer appends payload-selection provenance to the installed
   `/etc/ourbox/release` before poweroff.
 
+## Installer SSH policy
+- Shared installer SSH semantics come from the upstream `sw-ourbox-os` installer SSH contract and
+  the vendored helper at `/opt/ourbox/tools/installer-ssh-helper.sh`.
+- Matchbox keeps installer SSH policy at image-build time. Boot-media runtime overrides from
+  `/boot/firmware/ourbox-installer.env` do not apply to `OURBOX_INSTALLER_SSH_*` knobs.
+- Official/public Matchbox media currently ships with `OURBOX_INSTALLER_SSH_MODE=off`, meaning the
+  shared contract exposes no usable installer SSH login path.
+- SSH-enabled Matchbox support or lab media is explicit opt-in only. `key` mode requires explicit
+  `OURBOX_INSTALLER_SSH_AUTHORIZED_KEYS`, `password` mode requires explicit
+  `OURBOX_INSTALLER_SSH_PASSWORD_HASH`, and `both` requires at least one usable auth input.
+- Matchbox does not currently support local runtime password generation for installer SSH.
+  `OURBOX_INSTALLER_SSH_GENERATE_PASSWORD_IF_EMPTY` stays `0`.
+
 ## Official builds
 - Official Matchbox workflows now publish the OS artifact first, then build the installer with that exact digest-pinned OS ref baked into `OS_DEFAULT_REF`.
 - Official installers bake `INSTALL_DEFAULTS_REF=''` for deterministic default installs; operators can still override via `/boot/firmware/ourbox-installer.env`.
+- Official/public installers also set the full installer SSH posture explicitly in workflow code and
+  currently use `OURBOX_INSTALLER_SSH_MODE=off`.
 - Push-to-`main` official candidate builds consume the generated pinned refs in `release/official-inputs.env` and publish the `beta` lane.
 - Stable builds are a promotion of that already-published candidate digest once both candidate success and a matching published GitHub Release are present; they are not rebuilt on release.
 - Scheduled nightly integration builds resolve the latest `sw-ourbox-os` `edge` platform bundle digests at workflow time and publish the `nightly` lane.
