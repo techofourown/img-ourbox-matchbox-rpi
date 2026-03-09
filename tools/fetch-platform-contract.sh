@@ -65,7 +65,20 @@ else
   fi
 fi
 
-oras pull "${REF}" -o "${PULL_DIR}" | tee "${META_DIR}/oras.pull.log"
+PULL_REF="${REF}"
+if [[ -n "${RESOLVED_DIGEST}" ]] && [[ "${REF}" != *"@sha256:"* ]]; then
+  repo_prefix="${REF%/*}"
+  ref_leaf="${REF##*/}"
+  repo_leaf="${ref_leaf%%:*}"
+  if [[ "${repo_leaf}" != "${ref_leaf}" ]]; then
+    PULL_REF="${repo_prefix}/${repo_leaf}@${RESOLVED_DIGEST}"
+    log "Pulling by resolved digest: ${PULL_REF}"
+  else
+    log "WARNING: could not derive immutable pull ref from ${REF}; pulling original ref"
+  fi
+fi
+
+oras pull "${PULL_REF}" -o "${PULL_DIR}" | tee "${META_DIR}/oras.pull.log"
 
 TARBALL="${PULL_DIR}/dist/platform-contract.tar.gz"
 if [[ ! -f "${TARBALL}" ]]; then
