@@ -1,3 +1,10 @@
+## [0.11.4](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.3...v0.11.4) (2026-03-10)
+
+
+### Bug Fixes
+
+* resolve pr batch diffs from pr refs ([460a617](https://github.com/techofourown/img-ourbox-matchbox/commit/460a617056a59c75e21dc0c169c500def9cbdfb5))
+
 ## [0.11.3](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.2...v0.11.3) (2026-03-10)
 
 
