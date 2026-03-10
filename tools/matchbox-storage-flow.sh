@@ -145,13 +145,15 @@ matchbox_choose_system_disk() {
   local disks=("$@")
   local pick="" note=""
 
-  matchbox_show_nvme_summary "${disks[@]}"
-  echo "Choose SYSTEM disk (this disk will be wiped and flashed):"
+  # This function is called via command substitution, so menu output must stay
+  # off stdout or it will be captured instead of shown to the operator.
+  matchbox_show_nvme_summary "${disks[@]}" >&2
+  echo "Choose SYSTEM disk (this disk will be wiped and flashed):" >&2
 
   note="$(matchbox_disk_role_hint "${disks[0]}")"
-  printf '  1) %s  [%s]\n' "${disks[0]}" "${note}"
+  printf '  1) %s  [%s]\n' "${disks[0]}" "${note}" >&2
   note="$(matchbox_disk_role_hint "${disks[1]}")"
-  printf '  2) %s  [%s]\n' "${disks[1]}" "${note}"
+  printf '  2) %s  [%s]\n' "${disks[1]}" "${note}" >&2
 
   read -r -p "Enter 1 or 2: " pick
   case "${pick}" in
