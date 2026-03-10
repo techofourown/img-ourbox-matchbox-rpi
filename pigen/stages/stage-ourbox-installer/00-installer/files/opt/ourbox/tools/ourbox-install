@@ -343,12 +343,6 @@ wait_for_network() {
   [[ "${ok}" -eq 1 ]] || die "network not ready (no global IPv4 after ${retries} attempts)"
 }
 
-banner() {
-  echo "=================================================================="
-  echo "OurBox Matchbox Installer"
-  echo "=================================================================="
-}
-
 show_default_choice() {
   local ref="$1"
   echo
