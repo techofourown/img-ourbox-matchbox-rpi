@@ -11,6 +11,7 @@ source "${ROOT}/tools/registry.sh"
 cleanup_loopdevs_on_exit() {
   local rc=$?
   trap - EXIT
+  rm -rf "${BUILD_TMP_DIR:-}" || true
   "${ROOT}/tools/sanitize-loopdevs.sh" || true
   exit "${rc}"
 }
@@ -42,6 +43,18 @@ cd "${ROOT}"
 : "${OS_REGISTRY_USERNAME:=}"
 : "${OS_REGISTRY_PASSWORD:=}"
 
+append_shell_override() {
+  local file="$1" key="$2" value="$3"
+  printf '%s=%q\n' "${key}" "${value}" >> "${file}"
+}
+
+append_optional_override() {
+  local file="$1" key="$2"
+  if [[ -n "${!key+x}" ]]; then
+    append_shell_override "${file}" "${key}" "${!key-}"
+  fi
+}
+
 if [[ "${OURBOX_REQUIRE_EXPLICIT_VERSION}" == "1" && "${OURBOX_VERSION}" == "dev" ]]; then
   die "OURBOX_VERSION resolved to the default 'dev'; preserve the workflow env across sudo (official lanes should use sudo -E)"
 fi
@@ -68,6 +81,19 @@ flock -n 9 || die "another build is already running (lock: ${LOCK_FILE})"
 
 BUILD_MARKER="${ROOT}/deploy/.build-installer-start"
 : > "${BUILD_MARKER}"
+
+BUILD_TMP_DIR="$(mktemp -d)"
+PIGEN_CONFIG="${BUILD_TMP_DIR}/ourbox-installer.conf"
+cp "${ROOT}/pigen/config/ourbox-installer.conf" "${PIGEN_CONFIG}"
+
+# Preserve exact SSH inputs, including spaces in authorized_keys, by carrying
+# them through the generated pi-gen config file instead of PIGEN_DOCKER_OPTS.
+append_optional_override "${PIGEN_CONFIG}" "OURBOX_INSTALLER_SSH_MODE"
+append_optional_override "${PIGEN_CONFIG}" "OURBOX_INSTALLER_SSH_USER"
+append_optional_override "${PIGEN_CONFIG}" "OURBOX_INSTALLER_SSH_PASSWORD_HASH"
+append_optional_override "${PIGEN_CONFIG}" "OURBOX_INSTALLER_SSH_AUTHORIZED_KEYS"
+append_optional_override "${PIGEN_CONFIG}" "OURBOX_INSTALLER_SSH_ALLOW_ROOT"
+append_optional_override "${PIGEN_CONFIG}" "OURBOX_INSTALLER_SSH_GENERATE_PASSWORD_IF_EMPTY"
 
 DOCKER="${DOCKER:-$(pick_container_cli)}"
 export DOCKER
@@ -112,9 +138,9 @@ log "Preflight: sanitizing host loop devices to protect pi-gen export-image"
 "${ROOT}/tools/sanitize-loopdevs.sh"
 
 if [[ "$(cli_base "${DOCKER}")" == "podman" && "${DOCKER}" == *" "* && -n "${SUDO}" ]]; then
-  DOCKER=podman ${SUDO} "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox-installer.conf"
+  DOCKER=podman ${SUDO} "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${PIGEN_CONFIG}"
 else
-  "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${ROOT}/pigen/config/ourbox-installer.conf"
+  "${ROOT}/vendor/pi-gen/build-docker.sh" -c "${PIGEN_CONFIG}"
 fi
 
 move_into_deploy() {

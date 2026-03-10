@@ -71,6 +71,12 @@ jobs:
           OS_REPO: ghcr.io/techofourown/ourbox-matchbox-os
           OS_DEFAULT_REF: ${{ env.OS_DEFAULT_REF }}
           INSTALL_DEFAULTS_REF: ""
+          OURBOX_INSTALLER_SSH_MODE: off
+          OURBOX_INSTALLER_SSH_USER: ourbox-installer
+          OURBOX_INSTALLER_SSH_PASSWORD_HASH: ""
+          OURBOX_INSTALLER_SSH_AUTHORIZED_KEYS: ""
+          OURBOX_INSTALLER_SSH_ALLOW_ROOT: "0"
+          OURBOX_INSTALLER_SSH_GENERATE_PASSWORD_IF_EMPTY: "0"
           OURBOX_REQUIRE_EXPLICIT_VERSION: "1"
           OURBOX_REQUIRE_OS_DEFAULT_REF: "1"
 

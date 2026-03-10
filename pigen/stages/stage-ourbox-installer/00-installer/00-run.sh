@@ -20,6 +20,9 @@ install -D -m 0644 \
 install -D -m 0644 \
   "${REPO_ROOT}/tools/installer-selection-resolver.sh" \
   "${ROOTFS_DIR}/opt/ourbox/tools/installer-selection-resolver.sh"
+install -D -m 0644 \
+  "${REPO_ROOT}/tools/installer-ssh-helper.sh" \
+  "${ROOTFS_DIR}/opt/ourbox/tools/installer-ssh-helper.sh"
 
 install -d -m 0755 "${ROOTFS_DIR}/opt/ourbox/installer"
 # Runtime installer will fetch payloads from OCI at boot; no payloads baked in.
