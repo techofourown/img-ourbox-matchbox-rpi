@@ -410,37 +410,39 @@ def filter_excluded_files(files: List[str]) -> Tuple[List[str], List[str]]:
 
 
 def checkout_pr_branch(pr_info: Dict[str, str], remote: str) -> str:
-    """Checkout a specific PR branch, falling back to PR refs when needed."""
+    """Checkout the requested PR by PR ref, not by an existing local branch name."""
     branch_name = pr_info["branch"]
-    print(f"Attempting to checkout branch {branch_name}...")
+    pr_number = pr_info["number"]
+    fallback_branch = f"pr-{pr_number}"
+    print(
+        f"Resolving PR #{pr_number} into local branch {fallback_branch} "
+        f"(head ref: {branch_name})..."
+    )
 
     try:
-        run_command(f"git checkout {shlex.quote(branch_name)}")
-        print(f"✓ Checked out existing branch: {branch_name}")
-        return branch_name
-    except subprocess.CalledProcessError:
-        pass
-
-    try:
+        run_command(f"git fetch {shlex.quote(remote)} pull/{pr_number}/head")
         run_command(
-            f"git checkout -b {shlex.quote(branch_name)} "
-            f"{shlex.quote(remote)}/{shlex.quote(branch_name)}"
+            f"git checkout -B {shlex.quote(fallback_branch)} FETCH_HEAD"
         )
-        print(f"✓ Created and checked out branch: {branch_name}")
-        return branch_name
-    except subprocess.CalledProcessError:
-        print(f"Branch {branch_name} not found on {remote}, trying PR ref...")
-
-    fallback_branch = f"pr-{pr_info['number']}"
-    try:
-        run_command(
-            f"git fetch {shlex.quote(remote)} pull/{pr_info['number']}/head:{shlex.quote(fallback_branch)}"
-        )
-        run_command(f"git checkout {shlex.quote(fallback_branch)}")
         print(f"✓ Checked out PR ref as {fallback_branch}")
         return fallback_branch
+    except subprocess.CalledProcessError:
+        print(
+            f"PR ref for PR #{pr_number} was unavailable, "
+            f"falling back to remote branch {branch_name}..."
+        )
+
+    remote_branch = f"{remote}/{branch_name}"
+    try:
+        run_command(f"git fetch {shlex.quote(remote)} {shlex.quote(branch_name)}")
+        run_command(
+            f"git checkout -B {shlex.quote(fallback_branch)} "
+            f"{shlex.quote(remote_branch)}"
+        )
+        print(f"✓ Checked out remote branch as {fallback_branch}")
+        return fallback_branch
     except subprocess.CalledProcessError as exc:
-        print(f"Error: Could not checkout branch for PR #{pr_info['number']}")
+        print(f"Error: Could not checkout branch for PR #{pr_number}")
         raise exc
 
 

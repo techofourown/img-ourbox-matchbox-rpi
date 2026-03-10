@@ -228,6 +228,25 @@ class PrBatchBigPictureTests(unittest.TestCase):
 
         self.assertEqual(outputs, [])
 
+    def test_checkout_pr_branch_prefers_pr_ref_over_existing_local_branch(self) -> None:
+        commands = []
+
+        def fake_run_command(cmd: str, check: bool = True, capture_output: bool = True) -> str:
+            commands.append(cmd)
+            return ""
+
+        with mock.patch.object(MODULE, "run_command", side_effect=fake_run_command):
+            branch = MODULE.checkout_pr_branch({"number": 123, "branch": "patch-1"}, "github")
+
+        self.assertEqual(branch, "pr-123")
+        self.assertEqual(
+            commands,
+            [
+                "git fetch github pull/123/head",
+                "git checkout -B pr-123 FETCH_HEAD",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
