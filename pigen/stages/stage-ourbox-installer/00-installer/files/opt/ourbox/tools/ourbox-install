@@ -4,6 +4,11 @@ set -euo pipefail
 # shellcheck disable=SC1091
 source /opt/ourbox/tools/lib.sh
 
+INSTALLER_LOG="/run/ourbox-installer.log"
+if command -v tee >/dev/null 2>&1; then
+  exec > >(tee -a "${INSTALLER_LOG}") 2>&1
+fi
+
 need_cmd xz
 need_cmd xzcat
 need_cmd sha256sum
@@ -27,6 +32,7 @@ need_cmd curl
 need_cmd tar
 need_cmd ip
 need_cmd sort
+need_cmd udevadm
 
 DATA_CHECK_MP="/run/ourbox-installer/data-check"
 SYS_BOOT_MP="/run/ourbox-installer/sys-boot"
@@ -71,6 +77,8 @@ PULL_REF=""
 OS_ARTIFACT_SOURCE="registry"
 OS_ARTIFACT_REF=""
 OS_ARTIFACT_DIGEST=""
+IDENTITY_USERNAME="ourbox"
+IDENTITY_PASSWORD_HASH=""
 # shellcheck disable=SC2034  # consumed by sourced storage-flow helper
 MATCHBOX_DATA_CHECK_MP="${DATA_CHECK_MP}"
 
@@ -108,18 +116,104 @@ finalize() {
 
   log "ERROR: Installer failed (rc=${rc})."
   log "Dropping to an interactive shell for debugging."
+  log "Installer log is available at ${INSTALLER_LOG}"
   log "When you're done, type: poweroff"
 
   exec /bin/bash -l
 }
 trap finalize EXIT
 
-prompt_confirm_exact() {
+confirm_exact_answer() {
   local expected="$1"
   local prompt="$2"
   local ans=""
+
   read -r -p "${prompt} " ans
-  [[ "${ans}" == "${expected}" ]] || die "confirmation did not match (expected: ${expected})"
+  [[ "${ans}" == "${expected}" ]]
+}
+
+prompt_confirm_exact() {
+  local expected="$1"
+  local prompt="$2"
+  confirm_exact_answer "${expected}" "${prompt}" \
+    || die "confirmation did not match (expected: ${expected})"
+}
+
+prompt_nonempty() {
+  local prompt="$1"
+  local default="${2:-}"
+  local ans=""
+
+  if [[ -n "${default}" ]]; then
+    read -r -p "${prompt} [${default}]: " ans
+    ans="${ans:-${default}}"
+  else
+    read -r -p "${prompt}: " ans
+  fi
+
+  [[ -n "${ans}" ]] || die "value required"
+  printf '%s\n' "${ans}"
+}
+
+prompt_password_hash() {
+  local pw1="" pw2=""
+
+  while true; do
+    read -r -s -p "Password: " pw1; echo >&2
+    read -r -s -p "Confirm:  " pw2; echo >&2
+    [[ -n "${pw1}" ]] || { echo "Password cannot be empty." >&2; continue; }
+    [[ "${pw1}" == "${pw2}" ]] || { echo "Passwords did not match. Try again." >&2; continue; }
+    printf '%s' "${pw1}" | openssl passwd -6 -stdin
+    return 0
+  done
+}
+
+# shellcheck disable=SC2317  # banner is reached from the interactive main flow
+banner() {
+  local ip=""
+
+  ip="$(ip route get 10.255.255.255 2>/dev/null | awk '/src/ {print $7; exit}' || true)"
+  echo
+  echo "=================================================================="
+  echo "OurBox Matchbox Installer"
+  echo "=================================================================="
+  if [[ -n "${ip}" ]]; then
+    echo "Network IP    : ${ip}"
+  fi
+  echo "Installer log : ${INSTALLER_LOG}"
+  echo "=================================================================="
+  echo
+}
+
+show_install_plan() {
+  echo "Install summary:"
+  echo "  SYSTEM disk : ${MATCHBOX_SYSTEM_DISK}"
+  if [[ -n "${MATCHBOX_SYSTEM_DISK_SERIAL}" ]]; then
+    echo "  Disk serial : ${MATCHBOX_SYSTEM_DISK_SERIAL}"
+  fi
+  echo "  DATA disk   : ${MATCHBOX_DATA_DISK}"
+  echo "  DATA action : ${MATCHBOX_DATA_ACTION_SUMMARY}"
+  if [[ -n "${MATCHBOX_DATA_PART}" ]]; then
+    echo "  DATA part   : ${MATCHBOX_DATA_PART}"
+  fi
+  echo "  OS artifact : ${OS_ARTIFACT_REF}"
+  echo "  Payload SHA : ${PAYLOAD_SHA256}"
+  echo "  Username    : ${IDENTITY_USERNAME}"
+  if [[ "${MATCHBOX_SYSTEM_DISK_WAS_DATA}" == "1" ]]; then
+    echo "  Note        : selected SYSTEM disk currently carries OURBOX_DATA and will be cleared"
+  fi
+  echo
+}
+
+show_completion_summary() {
+  echo "Handoff summary:"
+  echo "  SYSTEM disk : ${MATCHBOX_SYSTEM_DISK}"
+  echo "  DATA disk   : ${MATCHBOX_DATA_DISK}"
+  echo "  DATA action : ${MATCHBOX_DATA_ACTION_SUMMARY}"
+  echo "  OS artifact : ${OS_ARTIFACT_REF}"
+  echo "  Payload SHA : ${PAYLOAD_SHA256}"
+  echo "  Username    : ${IDENTITY_USERNAME}"
+  echo
 }
 
 matchbox_partition_path() {
@@ -520,7 +614,13 @@ EOF
 }
 
 main() {
+  local root_src root_real root_parent
+  local disks=()
+
   banner
+  echo "Step 1 of 4: Resolve OS artifact"
+  echo "Checking baked defaults, optional remote install-defaults, and the selected OS payload."
+  echo
 
   load_payload_config
   ensure_dirs
@@ -536,10 +636,15 @@ main() {
   log "Verifying compressed payload integrity"
   xz -t "${PAYLOAD_PATH}"
 
+  banner
   show_payload_metadata
 
+  banner
+  echo "Step 2 of 4: Review storage plan"
+  echo "Matchbox requires exactly two NVMe disks: one SYSTEM disk and one DATA disk."
+  echo
+
   log "Running hard safety preflight"
-  local root_src root_real root_parent
   root_src="$(findmnt -nr -o SOURCE / 2>/dev/null || true)"
   root_real="$(readlink -f "${root_src}" 2>/dev/null || echo "${root_src}")"
   root_parent="$(lsblk -no PKNAME "${root_real}" 2>/dev/null || true)"
@@ -548,8 +653,8 @@ main() {
   fi
   [[ "${root_real}" != /dev/nvme* ]] || die "root filesystem is on NVMe (${root_real}); boot installer from SD/USB"
 
+  udevadm settle --timeout=10 || true
   log "Waiting for exactly 2 NVMe disks to enumerate"
-  local disks=()
   for _i in $(seq 1 40); do
     mapfile -t disks < <(matchbox_nvme_disks)
     [[ "${#disks[@]}" -eq 2 ]] && break
@@ -568,51 +673,62 @@ main() {
 
   log "Preparing storage layout"
   matchbox_prepare_storage_layout "${disks[@]}"
-  local dpart ddisk sys_disk
-  dpart="${MATCHBOX_DATA_PART}"
-  ddisk="${MATCHBOX_DATA_DISK}"
-  sys_disk="${MATCHBOX_SYSTEM_DISK}"
 
-  echo
-  echo "Disk selection summary:"
-  echo "  DATA   : ${ddisk} (partition ${dpart}, LABEL=OURBOX_DATA)"
-  echo "  SYSTEM : ${sys_disk} (will be wiped)"
+  banner
+  echo "Step 3 of 4: Set identity for the installed system"
+  echo "(You can change the username or password later on the installed system.)"
   echo
 
-  prompt_confirm_exact "${sys_disk}" "Type the SYSTEM disk path exactly to continue:"
-  prompt_confirm_exact "FLASH" "Type FLASH to wipe and flash SYSTEM:"
+  IDENTITY_USERNAME="$(prompt_nonempty "Username for first boot" "ourbox")"
+  echo
+  echo "Set the login password for ${IDENTITY_USERNAME}:"
+  IDENTITY_PASSWORD_HASH="$(prompt_password_hash)"
 
-  log "Preparing SYSTEM disk"
-  matchbox_wipe_disk_to_blank_state "${sys_disk}"
+  banner
+  echo "Step 4 of 4: Confirm and flash"
+  echo
+  show_install_plan
+  echo "WARNING: ALL DATA ON ${MATCHBOX_SYSTEM_DISK} WILL BE PERMANENTLY ERASED."
+  case "${MATCHBOX_DATA_ACTION}" in
+    init-data|erase-data)
+      echo "WARNING: ${MATCHBOX_DATA_DISK} will also be erased and recreated as LABEL=OURBOX_DATA."
+      ;;
+    reset-bootstrap)
+      echo "DATA on ${MATCHBOX_DATA_DISK} will be preserved, but bootstrap.done will be removed."
+      ;;
+    keep-data)
+      echo "DATA on ${MATCHBOX_DATA_DISK} will be preserved."
+      ;;
+  esac
+  echo
+  prompt_confirm_exact "INSTALL" "Type INSTALL to begin (or Ctrl-C to abort):"
+
+  matchbox_apply_storage_layout
 
   log "Flashing payload to SYSTEM"
-  xzcat "${PAYLOAD_PATH}" | dd of="${sys_disk}" bs=4M conv=fsync status=progress
+  xzcat "${PAYLOAD_PATH}" | dd of="${MATCHBOX_SYSTEM_DISK}" bs=4M conv=fsync status=progress
   sync
 
-  partprobe "${sys_disk}" || true
-  lsblk -f "${sys_disk}"
-
-  local username passhash
-  read -r -p "Username for first boot [ourbox]: " username
-  username="${username:-ourbox}"
-  passhash="$(openssl passwd -6)"
+  partprobe "${MATCHBOX_SYSTEM_DISK}" || true
+  lsblk -f "${MATCHBOX_SYSTEM_DISK}"
 
   mkdir -p "${SYS_BOOT_MP}"
   if mountpoint -q "${SYS_BOOT_MP}"; then
     umount "${SYS_BOOT_MP}" >/dev/null 2>&1 || true
   fi
 
-  mount "$(matchbox_partition_path "${sys_disk}" 1)" "${SYS_BOOT_MP}"
-  printf '%s:%s\n' "${username}" "${passhash}" > "${SYS_BOOT_MP}/userconf.txt"
+  mount "$(matchbox_partition_path "${MATCHBOX_SYSTEM_DISK}" 1)" "${SYS_BOOT_MP}"
+  printf '%s:%s\n' "${IDENTITY_USERNAME}" "${IDENTITY_PASSWORD_HASH}" > "${SYS_BOOT_MP}/userconf.txt"
   sync
   umount "${SYS_BOOT_MP}"
   log "userconf written"
 
-  write_install_provenance "${sys_disk}"
+  write_install_provenance "${MATCHBOX_SYSTEM_DISK}"
 
   teardown_installer_ssh
 
   echo
+  show_completion_summary
   echo "Remove installer media"
   echo "Boot from NVMe"
 }

@@ -38,15 +38,23 @@ Key variables:
   upstream reference helper and contract defined in `sw-ourbox-os`.
 - The vendored installer SSH helper copy is checked in CI against the upstream revision recorded in
   `tools/installer-ssh-helper.upstream.env`.
+- Installer logs its operator-visible flow to `/run/ourbox-installer.log` in addition to `tty1`,
+  so support media can inspect the same transcript over SSH.
 - Installer loads baked defaults, then attempts to pull `${INSTALL_DEFAULTS_REF}` and apply `defaults/${INSTALLER_ID}.env`.
 - If remote defaults pull fails, installer falls back to baked defaults.
 - Boot-media override (`/boot/firmware/ourbox-installer.env`) is applied last and wins for runtime
   payload-selection controls. It does not override installer SSH policy.
 - A non-empty baked `OS_DEFAULT_REF` remains in force unless remote install-defaults explicitly replaces it with another non-empty ref.
-- Installer shows both NVMe disks and requires an explicit SYSTEM-disk choice; the other NVMe becomes DATA for that install.
-- If the chosen SYSTEM disk currently carries `LABEL=OURBOX_DATA`, installer requires an explicit repurpose confirmation before clearing that label and continuing.
-- If the chosen DATA disk already contains OurBox state, installer offers `RESET-BOOTSTRAP`, `ERASE-DATA`, or `KEEP-DATA`.
+- Matchbox now follows a four-step installer flow:
+  1) resolve the OS payload
+  2) review the SYSTEM/DATA storage plan
+  3) set first-boot identity
+  4) review a final summary and type `INSTALL`
+- Installer shows both NVMe disks in a numbered menu and requires an explicit SYSTEM-disk confirmation before continuing; the other NVMe becomes DATA for that install.
+- If the chosen SYSTEM disk currently carries `LABEL=OURBOX_DATA`, installer warns that the label will be cleared as part of the later SYSTEM wipe.
+- If the chosen DATA disk already contains OurBox state, installer offers `RESET-BOOTSTRAP`, `ERASE-DATA`, or `KEEP-DATA` during planning and applies the chosen action only after the final `INSTALL` confirmation.
 - `KEEP-DATA` preserves existing DATA contents; bootstrap re-runs automatically on next boot only when the shipped contract state changed.
+- Matchbox no longer requires the operator to type the raw SYSTEM disk path or `FLASH`; destructive work starts only after the final `INSTALL` confirmation step.
 - Default action order:
   1) `OS_REF` (if set)
   2) `OS_DEFAULT_REF` (if set)
