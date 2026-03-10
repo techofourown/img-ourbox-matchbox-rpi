@@ -238,26 +238,23 @@ def normalize_comment_entry(comment: Dict[str, str], comment_type: str) -> Dict[
     return {
         "type": comment_type,
         "author": author,
-        "createdAt": comment.get("createdAt") or "",
+        "createdAt": comment.get("createdAt") or comment.get("submittedAt") or "",
         "url": comment.get("url") or "",
         "body": comment.get("body") or "",
     }
 
 
 def get_pr_comments(pr_number: int) -> List[Dict[str, str]]:
-    """Get all comments (issue + review threads) for a specific PR."""
-    comments_json = run_command(
-        f"gh pr view {pr_number} --json comments,reviewThreads"
-    )
+    """Get all comments (issue + reviews) for a specific PR."""
+    comments_json = run_command(f"gh pr view {pr_number} --json comments,reviews")
     data = json.loads(comments_json)
 
     normalized: List[Dict[str, str]] = []
     for comment in data.get("comments", []):
         normalized.append(normalize_comment_entry(comment, "issue"))
 
-    for thread in data.get("reviewThreads", []):
-        for review_comment in thread.get("comments", []):
-            normalized.append(normalize_comment_entry(review_comment, "review"))
+    for review in data.get("reviews", []):
+        normalized.append(normalize_comment_entry(review, "review"))
 
     normalized.sort(key=lambda c: c.get("createdAt") or "")
     return normalized
@@ -324,21 +321,22 @@ def get_failed_check_logs(check: Dict[str, str]) -> str | None:
         return None
 
 
-def filter_existing_files(files: List[str]) -> Tuple[List[str], List[str]]:
-    """Filter list of files to only those that exist on current branch."""
-    existing_files: List[str] = []
-    deleted_files: List[str] = []
+def report_missing_files_on_checked_out_branch(files: List[str]) -> List[str]:
+    """Report changed paths that are absent on the currently checked out branch."""
+    missing_files: List[str] = []
 
     for file_path in files:
-        if os.path.exists(file_path):
-            existing_files.append(file_path)
-        else:
-            deleted_files.append(file_path)
+        if not os.path.exists(file_path):
+            missing_files.append(file_path)
 
-    if deleted_files:
-        print(f"Skipping {len(deleted_files)} deleted file(s): {', '.join(deleted_files)}")
+    if missing_files:
+        print(
+            "Including "
+            f"{len(missing_files)} path(s) that are absent on the checked-out branch: "
+            f"{', '.join(missing_files)}"
+        )
 
-    return existing_files, deleted_files
+    return missing_files
 
 
 def filter_excluded_files(files: List[str]) -> Tuple[List[str], List[str]]:
@@ -871,19 +869,13 @@ def main() -> None:
                 print(f"Failed to checkout branch for PR #{pr_info['number']}")
                 continue
 
-            existing_files, deleted_files = filter_existing_files(included_files)
-            if not existing_files and deleted_files:
-                print(
-                    f"No existing files to process for PR #{pr_info['number']} "
-                    "(all files were deleted)"
-                )
-                continue
+            report_missing_files_on_checked_out_branch(included_files)
 
             print(
-                f"Files to process ({len(existing_files)}): "
-                f"{', '.join(existing_files)}"
+                f"Files to process ({len(included_files)}): "
+                f"{', '.join(included_files)}"
             )
-            touched_files.update(existing_files)
+            touched_files.update(included_files)
 
             try:
                 comments = get_pr_comments(pr_info["number"])
@@ -914,7 +906,7 @@ def main() -> None:
             )
             if run_big_picture(
                 pr_info,
-                existing_files,
+                included_files,
                 comments,
                 checks,
                 output_file,
@@ -928,12 +920,12 @@ def main() -> None:
                         "info": pr_info,
                         "file": output_file,
                         "local_branch": local_branch,
-                        "files": existing_files,
+                        "files": included_files,
                     }
                 )
             if run_big_picture(
                 pr_info,
-                existing_files,
+                included_files,
                 comments,
                 checks_with_logs,
                 output_file_with_logs,
@@ -947,7 +939,7 @@ def main() -> None:
                         "info": pr_info,
                         "file": output_file_with_logs,
                         "local_branch": local_branch,
-                        "files": existing_files,
+                        "files": included_files,
                     }
                 )
 
