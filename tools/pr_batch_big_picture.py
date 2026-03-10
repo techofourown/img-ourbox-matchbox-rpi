@@ -16,9 +16,10 @@ import shlex
 import subprocess
 import sys
 from datetime import datetime
+from functools import lru_cache
 from itertools import combinations
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 
 class SelectionParseError(ValueError):
@@ -35,6 +36,17 @@ def run_command(cmd: str, check: bool = True, capture_output: bool = True) -> st
         text=True,
     )
     return result.stdout.strip() if capture_output else ""
+
+
+@lru_cache(maxsize=1)
+def get_repo_slug() -> str:
+    """Return the current GitHub repository slug."""
+    repo_info = run_command("gh repo view --json nameWithOwner")
+    data = json.loads(repo_info)
+    name_with_owner = data.get("nameWithOwner") or ""
+    if not name_with_owner:
+        raise KeyError("Missing nameWithOwner in gh repo view output")
+    return name_with_owner
 
 
 def parse_pr_selection(selection: str) -> List[int]:
@@ -232,32 +244,70 @@ def get_pr_changed_files(pr_number: int) -> List[str]:
     return [file_info["path"] for file_info in data.get("files", [])]
 
 
-def normalize_comment_entry(comment: Dict[str, str], comment_type: str) -> Dict[str, str]:
+def normalize_comment_entry(comment: Dict[str, Any], comment_type: str) -> Dict[str, str]:
     """Normalize a comment structure to a consistent shape."""
-    author = (comment.get("author") or {}).get("login") or "unknown"
-    return {
+    author_info = comment.get("author") or comment.get("user") or {}
+    author = author_info.get("login") or "unknown"
+
+    normalized = {
         "type": comment_type,
         "author": author,
-        "createdAt": comment.get("createdAt") or "",
-        "url": comment.get("url") or "",
+        "createdAt": (
+            comment.get("createdAt")
+            or comment.get("submittedAt")
+            or comment.get("created_at")
+            or ""
+        ),
+        "url": comment.get("html_url") or comment.get("url") or "",
         "body": comment.get("body") or "",
+        "state": comment.get("state") or "",
     }
+
+    if comment.get("path"):
+        normalized["path"] = str(comment.get("path") or "")
+    if comment.get("line") is not None:
+        normalized["line"] = str(comment.get("line"))
+    if comment.get("side"):
+        normalized["side"] = str(comment.get("side") or "")
+    if comment.get("in_reply_to_id") is not None:
+        normalized["inReplyToId"] = str(comment.get("in_reply_to_id"))
+
+    return normalized
+
+
+def should_include_review_entry(review: Dict[str, Any]) -> bool:
+    """Decide whether a review object should appear in the comment stream."""
+    review_body = review.get("body") or ""
+    if review_body.strip():
+        return True
+
+    review_state = (review.get("state") or "").upper()
+    return review_state in {"APPROVED", "CHANGES_REQUESTED"}
 
 
 def get_pr_comments(pr_number: int) -> List[Dict[str, str]]:
-    """Get all comments (issue + review threads) for a specific PR."""
-    comments_json = run_command(
-        f"gh pr view {pr_number} --json comments,reviewThreads"
-    )
+    """Get issue comments, review summaries, inline review comments, and replies."""
+    comments_json = run_command(f"gh pr view {pr_number} --json comments,reviews")
     data = json.loads(comments_json)
 
     normalized: List[Dict[str, str]] = []
     for comment in data.get("comments", []):
         normalized.append(normalize_comment_entry(comment, "issue"))
 
-    for thread in data.get("reviewThreads", []):
-        for review_comment in thread.get("comments", []):
-            normalized.append(normalize_comment_entry(review_comment, "review"))
+    for review in data.get("reviews", []):
+        if should_include_review_entry(review):
+            normalized.append(normalize_comment_entry(review, "review"))
+
+    review_comments_json = run_command(
+        f"gh api repos/{shlex.quote(get_repo_slug())}/pulls/{pr_number}/comments --paginate"
+    )
+    for review_comment in json.loads(review_comments_json):
+        comment_type = (
+            "review-reply"
+            if review_comment.get("in_reply_to_id") is not None
+            else "review-comment"
+        )
+        normalized.append(normalize_comment_entry(review_comment, comment_type))
 
     normalized.sort(key=lambda c: c.get("createdAt") or "")
     return normalized
@@ -324,21 +374,22 @@ def get_failed_check_logs(check: Dict[str, str]) -> str | None:
         return None
 
 
-def filter_existing_files(files: List[str]) -> Tuple[List[str], List[str]]:
-    """Filter list of files to only those that exist on current branch."""
-    existing_files: List[str] = []
-    deleted_files: List[str] = []
+def report_missing_files_on_checked_out_branch(files: List[str]) -> List[str]:
+    """Report changed paths that are absent on the currently checked out branch."""
+    missing_files: List[str] = []
 
     for file_path in files:
-        if os.path.exists(file_path):
-            existing_files.append(file_path)
-        else:
-            deleted_files.append(file_path)
+        if not os.path.exists(file_path):
+            missing_files.append(file_path)
 
-    if deleted_files:
-        print(f"Skipping {len(deleted_files)} deleted file(s): {', '.join(deleted_files)}")
+    if missing_files:
+        print(
+            "Including "
+            f"{len(missing_files)} path(s) that are absent on the checked-out branch: "
+            f"{', '.join(missing_files)}"
+        )
 
-    return existing_files, deleted_files
+    return missing_files
 
 
 def filter_excluded_files(files: List[str]) -> Tuple[List[str], List[str]]:
@@ -359,37 +410,39 @@ def filter_excluded_files(files: List[str]) -> Tuple[List[str], List[str]]:
 
 
 def checkout_pr_branch(pr_info: Dict[str, str], remote: str) -> str:
-    """Checkout a specific PR branch, falling back to PR refs when needed."""
+    """Checkout the requested PR by PR ref, not by an existing local branch name."""
     branch_name = pr_info["branch"]
-    print(f"Attempting to checkout branch {branch_name}...")
+    pr_number = pr_info["number"]
+    fallback_branch = f"pr-{pr_number}"
+    print(
+        f"Resolving PR #{pr_number} into local branch {fallback_branch} "
+        f"(head ref: {branch_name})..."
+    )
 
     try:
-        run_command(f"git checkout {shlex.quote(branch_name)}")
-        print(f"✓ Checked out existing branch: {branch_name}")
-        return branch_name
-    except subprocess.CalledProcessError:
-        pass
-
-    try:
+        run_command(f"git fetch {shlex.quote(remote)} pull/{pr_number}/head")
         run_command(
-            f"git checkout -b {shlex.quote(branch_name)} "
-            f"{shlex.quote(remote)}/{shlex.quote(branch_name)}"
+            f"git checkout -B {shlex.quote(fallback_branch)} FETCH_HEAD"
         )
-        print(f"✓ Created and checked out branch: {branch_name}")
-        return branch_name
-    except subprocess.CalledProcessError:
-        print(f"Branch {branch_name} not found on {remote}, trying PR ref...")
-
-    fallback_branch = f"pr-{pr_info['number']}"
-    try:
-        run_command(
-            f"git fetch {shlex.quote(remote)} pull/{pr_info['number']}/head:{shlex.quote(fallback_branch)}"
-        )
-        run_command(f"git checkout {shlex.quote(fallback_branch)}")
         print(f"✓ Checked out PR ref as {fallback_branch}")
         return fallback_branch
+    except subprocess.CalledProcessError:
+        print(
+            f"PR ref for PR #{pr_number} was unavailable, "
+            f"falling back to remote branch {branch_name}..."
+        )
+
+    remote_branch = f"{remote}/{branch_name}"
+    try:
+        run_command(f"git fetch {shlex.quote(remote)} {shlex.quote(branch_name)}")
+        run_command(
+            f"git checkout -B {shlex.quote(fallback_branch)} "
+            f"{shlex.quote(remote_branch)}"
+        )
+        print(f"✓ Checked out remote branch as {fallback_branch}")
+        return fallback_branch
     except subprocess.CalledProcessError as exc:
-        print(f"Error: Could not checkout branch for PR #{pr_info['number']}")
+        print(f"Error: Could not checkout branch for PR #{pr_number}")
         raise exc
 
 
@@ -434,6 +487,8 @@ def generate_file_descriptions(files: List[str]) -> List[str]:
 def run_big_picture(
     pr_info: Dict[str, str],
     files: List[str],
+    excluded_files: List[str],
+    all_files: List[str],
     comments: List[Dict[str, str]],
     checks: List[Dict[str, str]],
     output_file: str,
@@ -445,29 +500,42 @@ def run_big_picture(
     branch_for_diff = local_branch or pr_info["branch"]
     print(f"Creating diff compilation for PR #{pr_info['number']}...")
 
-    if not files:
-        print(f"Warning: No files found for PR #{pr_info['number']}")
-        return False
-
     files_arg = " ".join(shlex.quote(f) for f in files)
-    cmd = f"git diff {shlex.quote(base_branch)}...{shlex.quote(branch_for_diff)} -- {files_arg}"
-
-    diff_output = run_command(cmd)
+    if files_arg:
+        cmd = f"git diff {shlex.quote(base_branch)}...{shlex.quote(branch_for_diff)} -- {files_arg}"
+        diff_output = run_command(cmd)
+    else:
+        diff_output = ""
 
     summary_text = " ".join(pr_info.get("body", "").split()) or "(no summary provided)"
 
     with open(output_file, "w", encoding="utf-8") as diff_file:
         diff_file.write(f"# PR #{pr_info['number']}: {pr_info['title']}\n")
+        diff_file.write(f"# PR Number: {pr_info['number']}\n")
         diff_file.write(f"# Branch: {branch_for_diff}\n")
         diff_file.write(f"# Base: {base_branch}\n")
         diff_file.write(f"# Author: {pr_info.get('author', 'unknown')}\n")
         diff_file.write(f"# Created: {pr_info.get('createdAt', '')}\n")
         diff_file.write(f"# URL: {pr_info.get('url', '')}\n")
         diff_file.write(f"# Summary: {summary_text}\n")
-        diff_file.write(f"# Changed files: {len(files)}\n")
-        diff_file.write(f"# Files: {', '.join(files)}\n\n")
+        diff_file.write(f"# Changed files (total): {len(all_files)}\n")
+        diff_file.write(f"# Included files: {len(files)}\n")
+        diff_file.write(f"# Excluded files: {len(excluded_files)}\n")
+        diff_file.write(f"# All files: {', '.join(all_files) if all_files else '(none)'}\n")
+        diff_file.write(
+            f"# Included file list: {', '.join(files) if files else '(none)'}\n"
+        )
+        diff_file.write(
+            f"# Excluded file list: {', '.join(excluded_files) if excluded_files else '(none)'}\n\n"
+        )
         diff_file.write("=" * 80 + "\n")
-        diff_file.write(diff_output if diff_output else "# No differences found\n")
+        if files:
+            diff_file.write(diff_output if diff_output else "# No differences found\n")
+        else:
+            diff_file.write(
+                "# No included files for diff generation.\n"
+                "# All changed files for this PR were excluded from diff output.\n"
+            )
         diff_file.write("\n\n")
         diff_file.write("=" * 80 + "\n")
         diff_file.write(f"Checks ({len(checks)}):\n")
@@ -507,7 +575,17 @@ def run_big_picture(
                 author = comment.get("author") or "unknown author"
                 comment_type = comment.get("type") or "comment"
                 url = comment.get("url") or ""
-                heading = f"- [{timestamp}] {author} ({comment_type})"
+                state = comment.get("state") or ""
+                heading = f"- [{timestamp}] {author} ({comment_type}"
+                if state:
+                    heading += f", state={state}"
+                heading += ")"
+                if comment.get("path"):
+                    heading += f" on {comment['path']}"
+                    if comment.get("line"):
+                        heading += f":{comment['line']}"
+                if comment.get("inReplyToId"):
+                    heading += f" reply-to={comment['inReplyToId']}"
                 if url:
                     heading += f" [{url}]"
                 diff_file.write(heading + "\n")
@@ -563,6 +641,7 @@ def create_master_comparison(
 
 def create_touched_files_compilation(
     touched_files: Set[str],
+    touched_file_prs: Dict[str, Set[int]],
     base_branch: str,
     selection_requested: str,
     selection_canonical: str,
@@ -589,6 +668,10 @@ def create_touched_files_compilation(
             outf.write(f"{line}\n")
         outf.write(f"# Total unique files: {len(sorted_files)}\n")
         outf.write(f"# Source branch: {base_branch}\n")
+        outf.write(
+            "# Includes all changed paths from the selected PRs, including deleted "
+            "or otherwise excluded diff paths when they exist on the base branch.\n"
+        )
         outf.write(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         outf.write("=" * 80 + "\n\n")
 
@@ -604,7 +687,13 @@ def create_touched_files_compilation(
 
             outf.write("=" * 80 + "\n")
             outf.write(f"# File: {file_path}\n")
-            outf.write(f"# Source: {base_branch}\n\n")
+            outf.write(f"# Source: {base_branch}\n")
+            file_prs = sorted(touched_file_prs.get(file_path, set()))
+            if file_prs:
+                outf.write(f"# Touched by PRs: {', '.join(str(pr) for pr in file_prs)}\n")
+            else:
+                outf.write("# Touched by PRs: (unknown)\n")
+            outf.write("\n")
             outf.write(file_contents)
             if not file_contents.endswith("\n"):
                 outf.write("\n")
@@ -704,12 +793,18 @@ def create_round_robin_comparisons(
         )
 
         combined_files = sorted(set(left_files) | set(right_files))
+        if not combined_files:
+            print(
+                f"Skipping round-robin comparison for PR #{left_number} vs PR #{right_number} "
+                "because there are no included files to compare"
+            )
+            continue
+
         files_arg = " ".join(shlex.quote(f) for f in combined_files)
         diff_cmd = (
             f"git diff {shlex.quote(left_branch)} {shlex.quote(right_branch)}"
         )
-        if files_arg:
-            diff_cmd += f" -- {files_arg}"
+        diff_cmd += f" -- {files_arg}"
 
         diff_output = run_command(diff_cmd)
 
@@ -804,6 +899,7 @@ def main() -> None:
     selection_requested = args.pr_selection
     selection_canonical = format_pr_selection(selected_prs)
     selection_tag = build_selection_tag(selected_prs, selection_canonical)
+    os.makedirs(args.output_dir, exist_ok=True)
 
     print(f"Requested PR selection: {selection_requested}")
     print(f"Canonical PR selection: {selection_canonical}")
@@ -822,6 +918,7 @@ def main() -> None:
         print(f"Collecting info for PR selection: {selection_canonical}...")
         pr_infos: List[Dict[str, str]] = []
         touched_files: Set[str] = set()
+        touched_file_prs: Dict[str, Set[int]] = {}
         missing_prs: List[int] = []
 
         for pr_num in selected_prs:
@@ -858,12 +955,6 @@ def main() -> None:
             print(f"Total changed files: {len(all_files)}")
 
             included_files, _excluded_files = filter_excluded_files(all_files)
-            if not included_files:
-                print(
-                    f"No files to process for PR #{pr_info['number']} "
-                    "(all files were excluded)"
-                )
-                continue
 
             try:
                 local_branch = checkout_pr_branch(pr_info, args.remote)
@@ -871,19 +962,22 @@ def main() -> None:
                 print(f"Failed to checkout branch for PR #{pr_info['number']}")
                 continue
 
-            existing_files, deleted_files = filter_existing_files(included_files)
-            if not existing_files and deleted_files:
-                print(
-                    f"No existing files to process for PR #{pr_info['number']} "
-                    "(all files were deleted)"
-                )
-                continue
+            if included_files:
+                report_missing_files_on_checked_out_branch(included_files)
 
-            print(
-                f"Files to process ({len(existing_files)}): "
-                f"{', '.join(existing_files)}"
-            )
-            touched_files.update(existing_files)
+            if included_files:
+                print(
+                    f"Files to process ({len(included_files)}): "
+                    f"{', '.join(included_files)}"
+                )
+            else:
+                print(
+                    f"All changed files for PR #{pr_info['number']} were excluded "
+                    f"from diff output; preserving PR metadata/comments/checks."
+                )
+            touched_files.update(all_files)
+            for file_path in all_files:
+                touched_file_prs.setdefault(file_path, set()).add(pr_info["number"])
 
             try:
                 comments = get_pr_comments(pr_info["number"])
@@ -914,7 +1008,9 @@ def main() -> None:
             )
             if run_big_picture(
                 pr_info,
-                existing_files,
+                included_files,
+                _excluded_files,
+                all_files,
                 comments,
                 checks,
                 output_file,
@@ -928,12 +1024,14 @@ def main() -> None:
                         "info": pr_info,
                         "file": output_file,
                         "local_branch": local_branch,
-                        "files": existing_files,
+                        "files": included_files,
                     }
                 )
             if run_big_picture(
                 pr_info,
-                existing_files,
+                included_files,
+                _excluded_files,
+                all_files,
                 comments,
                 checks_with_logs,
                 output_file_with_logs,
@@ -947,7 +1045,7 @@ def main() -> None:
                         "info": pr_info,
                         "file": output_file_with_logs,
                         "local_branch": local_branch,
-                        "files": existing_files,
+                        "files": included_files,
                     }
                 )
 
@@ -992,6 +1090,7 @@ def main() -> None:
             )
             create_touched_files_compilation(
                 touched_files,
+                touched_file_prs,
                 args.base_branch,
                 selection_requested,
                 selection_canonical,
@@ -1050,6 +1149,7 @@ def main() -> None:
             )
             create_touched_files_compilation(
                 touched_files,
+                touched_file_prs,
                 args.base_branch,
                 selection_requested,
                 selection_canonical,
