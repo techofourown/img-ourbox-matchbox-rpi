@@ -1,3 +1,10 @@
+## [0.11.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.1...v0.11.2) (2026-03-10)
+
+
+### Bug Fixes
+
+* **installer:** preserve ssh key overrides in pi-gen config ([6e894aa](https://github.com/techofourown/img-ourbox-matchbox/commit/6e894aa3241e86c8e213ed5b0e85436c23b81161))
+
 ## [0.11.1](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.0...v0.11.1) (2026-03-09)
 
 
