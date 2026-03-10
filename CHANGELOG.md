@@ -1,3 +1,11 @@
+## [0.11.3](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.2...v0.11.3) (2026-03-10)
+
+
+### Bug Fixes
+
+* **installer:** remove duplicate banner definition ([8cccf47](https://github.com/techofourown/img-ourbox-matchbox/commit/8cccf47b4212e1d4bef0c906acf5afdd03156610))
+* **installer:** show storage role menu during disk selection ([ad41248](https://github.com/techofourown/img-ourbox-matchbox/commit/ad41248aeeef6d8a8e40f69fe525cdfa2a5ce3d4))
+
 ## [0.11.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.1...v0.11.2) (2026-03-10)
 
 
