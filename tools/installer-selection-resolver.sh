@@ -201,11 +201,46 @@ ourbox_selection_catalog_newest_ref() {
   printf '%s\n' "${row##*$'\t'}"
 }
 
-ourbox_selection_determine_default_ref() {
+ourbox_selection_resolve_channel_ref() {
   local catalog_dir="$1"
+  local channel="$2"
   local channel_tag_ref=""
   local catalog_tsv=""
   local catalog_ref=""
+
+  OURBOX_INSTALL_SELECTION_SOURCE=""
+  OURBOX_RELEASE_CHANNEL=""
+  OURBOX_SELECTED_REF=""
+  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
+  OURBOX_CATALOG_REF=""
+
+  channel_tag_ref="${OS_REPO}:$(ourbox_selection_channel_tag "${channel}")"
+
+  if [[ "${OS_CATALOG_ENABLED:-1}" == "1" ]]; then
+    if ourbox_selection_pull_catalog "${catalog_dir}"; then
+      catalog_tsv="${catalog_dir}/catalog.tsv"
+      catalog_ref="$(ourbox_selection_catalog_newest_ref "${catalog_tsv}" "${channel}" || true)"
+      if ourbox_selection_is_digest_pinned_ref "${catalog_ref}"; then
+        OURBOX_INSTALL_SELECTION_SOURCE="catalog"
+        OURBOX_RELEASE_CHANNEL="${channel}"
+        OURBOX_SELECTED_REF="${catalog_ref}"
+        return 0
+      fi
+      ourbox_selection_log "Catalog has no valid digest-pinned entry for channel '${channel}'; falling back to channel tag."
+    else
+      ourbox_selection_log "Catalog unavailable; falling back to channel tag."
+    fi
+  fi
+
+  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
+  OURBOX_INSTALL_SELECTION_SOURCE="channel-tag"
+  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
+  OURBOX_RELEASE_CHANNEL="${channel}"
+  OURBOX_SELECTED_REF="${channel_tag_ref}"
+}
+
+ourbox_selection_determine_default_ref() {
+  local catalog_dir="$1"
 
   OURBOX_INSTALL_SELECTION_SOURCE=""
   OURBOX_RELEASE_CHANNEL=""
@@ -225,29 +260,224 @@ ourbox_selection_determine_default_ref() {
     return 0
   fi
 
-  channel_tag_ref="${OS_REPO}:$(ourbox_selection_channel_tag "${OS_CHANNEL}")"
+  ourbox_selection_resolve_channel_ref "${catalog_dir}" "${OS_CHANNEL}"
+}
 
-  if [[ "${OS_CATALOG_ENABLED:-1}" == "1" ]]; then
-    if ourbox_selection_pull_catalog "${catalog_dir}"; then
-      catalog_tsv="${catalog_dir}/catalog.tsv"
-      catalog_ref="$(ourbox_selection_catalog_newest_ref "${catalog_tsv}" "${OS_CHANNEL}" || true)"
-      if ourbox_selection_is_digest_pinned_ref "${catalog_ref}"; then
-        OURBOX_INSTALL_SELECTION_SOURCE="catalog"
-        OURBOX_RELEASE_CHANNEL="${OS_CHANNEL}"
-        OURBOX_SELECTED_REF="${catalog_ref}"
-        return 0
-      fi
-      ourbox_selection_log "Catalog has no valid digest-pinned entry for channel '${OS_CHANNEL}'; falling back to channel tag."
-    else
-      ourbox_selection_log "Catalog unavailable; falling back to channel tag."
-    fi
+ourbox_selection_ref_from_tag() {
+  local tag="$1"
+  printf '%s:%s\n' "${OS_REPO}" "${tag}"
+}
+
+ourbox_selection_show_default_choice() {
+  local ref="$1"
+
+  echo
+  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE}" == "remote" ]]; then
+    echo "Install defaults: remote (${INSTALL_DEFAULTS_REF})"
+    echo "Profile        : ${OURBOX_INSTALL_DEFAULTS_PROFILE}"
+  else
+    echo "Install defaults: baked defaults"
+  fi
+  echo "Default source : ${OURBOX_INSTALL_SELECTION_SOURCE:-pending}"
+  echo "Default: install '${ref}'"
+  echo "Options:"
+  echo "  [ENTER] Use default"
+  echo "  c       Choose channel (prefers newest catalog row for that lane)"
+  echo "  l       List from catalog (if available)"
+  echo "  r       Enter custom OCI ref (tag or digest)"
+  echo "  o       Override OS repo (custom registry/fork)"
+  echo "  q       Quit"
+  echo
+}
+
+ourbox_selection_override_repo_interactive() {
+  local next_repo=""
+  local next_catalog="${OS_TARGET}-catalog"
+  local user_catalog=""
+
+  read -r -p "Enter OCI repo (e.g., ghcr.io/org/ourbox-os): " next_repo
+  [[ -n "${next_repo}" ]] || {
+    ourbox_selection_log "Repository cannot be empty."
+    return 1
+  }
+
+  OS_REPO="${next_repo}"
+
+  # A repo override intentionally clears pinned defaults from upstream profile.
+  OS_REF=""
+  OS_DEFAULT_REF=""
+
+  read -r -p "Catalog tag [${next_catalog}]: " user_catalog
+  if [[ -n "${user_catalog}" ]]; then
+    OS_CATALOG_TAG="${user_catalog}"
+  else
+    OS_CATALOG_TAG="${next_catalog}"
   fi
 
-  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
-  OURBOX_INSTALL_SELECTION_SOURCE="channel-tag"
-  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
-  OURBOX_RELEASE_CHANNEL="${OS_CHANNEL}"
-  OURBOX_SELECTED_REF="${channel_tag_ref}"
+  ourbox_selection_log "OS repo override set to ${OS_REPO}"
+}
+
+ourbox_selection_choose_channel_interactive() {
+  local catalog_dir="$1"
+  local pick=""
+  local custom_tag=""
+
+  echo "Channels:"
+  echo "  1) stable (${CHANNEL_STABLE_TAG:-$(ourbox_selection_channel_tag stable)}) (recommended)"
+  echo "  2) beta (${CHANNEL_BETA_TAG:-$(ourbox_selection_channel_tag beta)})"
+  echo "  3) nightly (${CHANNEL_NIGHTLY_TAG:-$(ourbox_selection_channel_tag nightly)})"
+  echo "  4) exp-labs (${CHANNEL_EXP_LABS_TAG:-$(ourbox_selection_channel_tag exp-labs)})"
+  echo "  5) custom tag name"
+
+  read -r -p "Select channel [1-5]: " pick
+  case "${pick}" in
+    1|"")
+      ourbox_selection_resolve_channel_ref "${catalog_dir}" "stable"
+      ;;
+    2)
+      ourbox_selection_resolve_channel_ref "${catalog_dir}" "beta"
+      ;;
+    3)
+      ourbox_selection_resolve_channel_ref "${catalog_dir}" "nightly"
+      ;;
+    4)
+      ourbox_selection_resolve_channel_ref "${catalog_dir}" "exp-labs"
+      ;;
+    5)
+      read -r -p "Enter tag: " custom_tag
+      [[ -n "${custom_tag}" ]] || {
+        ourbox_selection_log "Tag cannot be empty."
+        return 1
+      }
+      OURBOX_SELECTED_REF="$(ourbox_selection_ref_from_tag "${custom_tag}")"
+      OURBOX_INSTALL_SELECTION_SOURCE="channel-tag"
+      OURBOX_RELEASE_CHANNEL=""
+      ;;
+    *)
+      ourbox_selection_log "Invalid choice."
+      return 1
+      ;;
+  esac
+}
+
+ourbox_selection_select_from_catalog_interactive() {
+  local catalog_dir="$1"
+  local catalog_tsv=""
+  local pick=""
+  local chosen=""
+  local channel=""
+  local tag=""
+  local created=""
+  local version=""
+  local contract=""
+  local pinned_ref=""
+  local i=1
+  local -a entries=()
+
+  OURBOX_CATALOG_REF=""
+  ourbox_selection_pull_catalog "${catalog_dir}" || {
+    ourbox_selection_log "Catalog unavailable; skipping list."
+    return 1
+  }
+
+  catalog_tsv="${catalog_dir}/catalog.tsv"
+  mapfile -t entries < <(ourbox_selection_catalog_entries "${catalog_tsv}")
+  if [[ "${#entries[@]}" -eq 0 ]]; then
+    ourbox_selection_log "Catalog pulled (${OURBOX_CATALOG_REF}) but contained no entries."
+    return 1
+  fi
+
+  echo
+  echo "Catalog entries (${OURBOX_CATALOG_REF}):"
+  for chosen in "${entries[@]}"; do
+    IFS=$'\t' read -r channel tag created version contract pinned_ref <<<"${chosen}"
+    printf "  %d) %-12s %-30s %s %s %s\n" "${i}" "${channel}" "${tag}" "${version}" "${created}" "${contract}"
+    i=$((i + 1))
+  done
+
+  read -r -p "Choose entry [1-${#entries[@]}] (or ENTER to cancel): " pick
+  [[ -n "${pick}" ]] || return 1
+  [[ "${pick}" =~ ^[0-9]+$ ]] || {
+    ourbox_selection_log "Invalid selection."
+    return 1
+  }
+  if (( pick < 1 || pick > ${#entries[@]} )); then
+    ourbox_selection_log "Selection out of range."
+    return 1
+  fi
+
+  chosen="${entries[$((pick - 1))]}"
+  IFS=$'\t' read -r channel tag created version contract pinned_ref <<<"${chosen}"
+  OURBOX_SELECTED_REF="${pinned_ref}"
+  OURBOX_INSTALL_SELECTION_SOURCE="catalog"
+  OURBOX_RELEASE_CHANNEL="${channel}"
+  ourbox_selection_log "Selected ${OURBOX_SELECTED_REF} (channel=${channel}, version=${version}, contract=${contract})"
+}
+
+ourbox_selection_prompt_custom_ref_interactive() {
+  local ref=""
+
+  read -r -p "Enter full OCI ref (e.g., repo:tag or repo@sha256:...): " ref
+  ourbox_selection_is_clean_single_line_ref "${ref}" || {
+    ourbox_selection_log "Ref must be a single-line OCI ref without whitespace."
+    return 1
+  }
+
+  OURBOX_SELECTED_REF="${ref}"
+  OURBOX_INSTALL_SELECTION_SOURCE="operator-override"
+  OURBOX_RELEASE_CHANNEL=""
+}
+
+ourbox_selection_interactive_select_ref() {
+  local catalog_root="$1"
+  local default_catalog_dir="${catalog_root}/default"
+  local channel_catalog_dir="${catalog_root}/channel"
+  local list_catalog_dir="${catalog_root}/list"
+  local choice=""
+  local default_ref=""
+  local default_source=""
+  local default_channel=""
+
+  OURBOX_SELECTED_REF=""
+  OURBOX_INSTALL_SELECTION_SOURCE=""
+  OURBOX_RELEASE_CHANNEL=""
+
+  while [[ -z "${OURBOX_SELECTED_REF}" ]]; do
+    ourbox_selection_determine_default_ref "${default_catalog_dir}"
+    default_ref="${OURBOX_SELECTED_REF}"
+    default_source="${OURBOX_INSTALL_SELECTION_SOURCE}"
+    default_channel="${OURBOX_RELEASE_CHANNEL}"
+    OURBOX_SELECTED_REF=""
+
+    ourbox_selection_show_default_choice "${default_ref}"
+    read -r -p "Choice: " choice
+
+    case "${choice}" in
+      "")
+        OURBOX_SELECTED_REF="${default_ref}"
+        OURBOX_INSTALL_SELECTION_SOURCE="${default_source}"
+        OURBOX_RELEASE_CHANNEL="${default_channel}"
+        ;;
+      c)
+        ourbox_selection_choose_channel_interactive "${channel_catalog_dir}" || true
+        ;;
+      l)
+        ourbox_selection_select_from_catalog_interactive "${list_catalog_dir}" || true
+        ;;
+      r)
+        ourbox_selection_prompt_custom_ref_interactive || true
+        ;;
+      o)
+        ourbox_selection_override_repo_interactive || true
+        ;;
+      q|Q)
+        ourbox_selection_die "Install aborted by user"
+        ;;
+      *)
+        ourbox_selection_log "Unknown option."
+        ;;
+    esac
+  done
 }
 
 ourbox_selection_ref_repo_base() {

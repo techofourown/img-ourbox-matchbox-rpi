@@ -71,8 +71,6 @@ INSTALLER_VERSION=""
 INSTALLER_GIT_HASH=""
 INSTALL_SELECTION_SOURCE=""
 RELEASE_CHANNEL=""
-DEFAULT_SELECTION_SOURCE=""
-DEFAULT_RELEASE_CHANNEL=""
 PULL_REF=""
 OS_ARTIFACT_SOURCE="registry"
 OS_ARTIFACT_REF=""
@@ -343,172 +341,11 @@ wait_for_network() {
   [[ "${ok}" -eq 1 ]] || die "network not ready (no global IPv4 after ${retries} attempts)"
 }
 
-show_default_choice() {
-  local ref="$1"
-  echo
-  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE}" == "remote" ]]; then
-    echo "Install defaults: remote (${INSTALL_DEFAULTS_REF})"
-    echo "Profile        : ${INSTALL_DEFAULTS_PROFILE}"
-  else
-    echo "Install defaults: baked defaults"
-  fi
-  echo "Default source : ${DEFAULT_SELECTION_SOURCE:-pending}"
-  echo "Default: install '${ref}'"
-  echo "Options:"
-  echo "  [ENTER] Use default"
-  echo "  c       Choose channel (stable/beta/nightly/exp-labs/custom)"
-  echo "  l       List from catalog (if available)"
-  echo "  r       Enter custom OCI ref (tag or digest)"
-  echo "  o       Override OS repo (custom registry/fork)"
-  echo "  q       Quit"
-  echo
-}
-
-ref_from_tag() {
-  local tag="$1"
-  echo "${OS_REPO}:${tag}"
-}
-
-default_payload_ref() {
-  ourbox_selection_determine_default_ref "${CATALOG_DIR}/default"
-  DEFAULT_SELECTION_SOURCE="${OURBOX_INSTALL_SELECTION_SOURCE}"
-  DEFAULT_RELEASE_CHANNEL="${OURBOX_RELEASE_CHANNEL}"
-  printf '%s\n' "${OURBOX_SELECTED_REF}"
-}
-
-override_repo() {
-  local next_repo=""
-  read -r -p "Enter OCI repo (e.g., ghcr.io/org/ourbox-matchbox-os): " next_repo
-  [[ -n "${next_repo}" ]] || { log "Repository cannot be empty"; return 1; }
-  OS_REPO="${next_repo}"
-
-  # A repo override intentionally clears pinned defaults from upstream profile.
-  OS_REF=""
-  OS_DEFAULT_REF=""
-
-  local next_catalog="${OS_TARGET}-catalog"
-  local user_catalog=""
-  read -r -p "Catalog tag [${next_catalog}]: " user_catalog
-  if [[ -n "${user_catalog}" ]]; then
-    OS_CATALOG_TAG="${user_catalog}"
-  else
-    OS_CATALOG_TAG="${next_catalog}"
-  fi
-
-  log "OS repo override set to ${OS_REPO}"
-}
-
-choose_channel() {
-  echo "Channels:"
-  echo "  1) ${CHANNEL_STABLE_TAG} (recommended)"
-  echo "  2) ${CHANNEL_BETA_TAG}"
-  echo "  3) ${CHANNEL_NIGHTLY_TAG}"
-  echo "  4) ${CHANNEL_EXP_LABS_TAG}"
-  echo "  5) custom tag name"
-  local pick=""
-  read -r -p "Select channel [1-5]: " pick
-  case "${pick}" in
-    1|"")
-      SELECTED_REF="$(ref_from_tag "${CHANNEL_STABLE_TAG}")"
-      INSTALL_SELECTION_SOURCE="channel-tag"
-      RELEASE_CHANNEL="stable"
-      ;;
-    2)
-      SELECTED_REF="$(ref_from_tag "${CHANNEL_BETA_TAG}")"
-      INSTALL_SELECTION_SOURCE="channel-tag"
-      RELEASE_CHANNEL="beta"
-      ;;
-    3)
-      SELECTED_REF="$(ref_from_tag "${CHANNEL_NIGHTLY_TAG}")"
-      INSTALL_SELECTION_SOURCE="channel-tag"
-      RELEASE_CHANNEL="nightly"
-      ;;
-    4)
-      SELECTED_REF="$(ref_from_tag "${CHANNEL_EXP_LABS_TAG}")"
-      INSTALL_SELECTION_SOURCE="channel-tag"
-      RELEASE_CHANNEL="exp-labs"
-      ;;
-    5)
-      local ch=""
-      read -r -p "Enter tag: " ch
-      [[ -n "${ch}" ]] || die "tag cannot be empty"
-      SELECTED_REF="$(ref_from_tag "${ch}")"
-      INSTALL_SELECTION_SOURCE="channel-tag"
-      RELEASE_CHANNEL=""
-      ;;
-    *) log "Invalid choice, using default";;
-  esac
-}
-
-select_from_catalog() {
-  CATALOG_REF=""
-  ourbox_selection_pull_catalog "${CATALOG_DIR}" || { log "Catalog unavailable; skipping list."; return 1; }
-  CATALOG_REF="${OURBOX_CATALOG_REF}"
-  local catalog="${CATALOG_DIR}/catalog.tsv"
-
-  mapfile -t entries < <(ourbox_selection_catalog_entries "${catalog}")
-  if [[ "${#entries[@]}" -eq 0 ]]; then
-    log "Catalog pulled (${CATALOG_REF}) but contained no entries."
-    return 1
-  fi
-
-  echo
-  echo "Catalog entries (${CATALOG_REF}):"
-  local i=1
-  for line in "${entries[@]}"; do
-    IFS=$'\t' read -r channel tag created version contract pinned_ref <<<"${line}"
-    printf "  %d) %-12s %-30s %s %s %s\n" "${i}" "${channel}" "${tag}" "${version}" "${created}" "${contract}"
-    i=$((i+1))
-  done
-
-  local pick=""
-  read -r -p "Choose entry [1-${#entries[@]}] (or ENTER to cancel): " pick
-  [[ -z "${pick}" ]] && return 1
-  [[ "${pick}" =~ ^[0-9]+$ ]] || { log "Invalid selection"; return 1; }
-  if (( pick < 1 || pick > ${#entries[@]} )); then
-    log "Selection out of range"
-    return 1
-  fi
-  local chosen="${entries[$((pick-1))]}"
-  IFS=$'\t' read -r channel tag created version contract pinned_ref <<<"${chosen}"
-  SELECTED_REF="${pinned_ref}"
-  INSTALL_SELECTION_SOURCE="catalog"
-  RELEASE_CHANNEL="${channel}"
-  log "Selected ${SELECTED_REF} (channel=${channel}, version=${version}, contract=${contract})"
-  return 0
-}
-
 select_payload_ref() {
-  SELECTED_REF=""
-  INSTALL_SELECTION_SOURCE=""
-  RELEASE_CHANNEL=""
-
-  while [[ -z "${SELECTED_REF}" ]]; do
-    local default_ref
-    default_ref="$(default_payload_ref)"
-    show_default_choice "${default_ref}"
-    local choice=""
-    read -r -p "Choice: " choice
-    case "${choice}" in
-      "" )
-        SELECTED_REF="${default_ref}"
-        INSTALL_SELECTION_SOURCE="${DEFAULT_SELECTION_SOURCE}"
-        RELEASE_CHANNEL="${DEFAULT_RELEASE_CHANNEL}"
-        ;;
-      c ) choose_channel ;;
-      l ) select_from_catalog || true ;;
-      r )
-        read -r -p "Enter full OCI ref (e.g., repo:tag or repo@sha256:...): " ref
-        [[ -n "${ref}" ]] || { log "Ref cannot be empty"; continue; }
-        SELECTED_REF="${ref}"
-        INSTALL_SELECTION_SOURCE="operator-override"
-        RELEASE_CHANNEL=""
-        ;;
-      o ) override_repo || true ;;
-      q|Q ) die "Install aborted by user" ;;
-      * ) log "Unknown option" ;;
-    esac
-  done
+  ourbox_selection_interactive_select_ref "${CATALOG_DIR}"
+  SELECTED_REF="${OURBOX_SELECTED_REF}"
+  INSTALL_SELECTION_SOURCE="${OURBOX_INSTALL_SELECTION_SOURCE}"
+  RELEASE_CHANNEL="${OURBOX_RELEASE_CHANNEL}"
 }
 
 parse_sha256_file() {

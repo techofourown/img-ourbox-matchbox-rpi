@@ -117,7 +117,7 @@ bash -euo pipefail -c '
 ' _ "${DEPLOY_DIR}/installer-artifact.meta.env"
 
 [[ -f "${STATE_DIR}/latest-catalog.tsv" ]] || die "catalog push did not write latest-catalog.tsv"
-grep -F $'rpi-stable	v9.9.9-rpi	' "${STATE_DIR}/latest-catalog.tsv" >/dev/null \
+grep -F $'stable	v9.9.9-rpi	' "${STATE_DIR}/latest-catalog.tsv" >/dev/null \
   || die "catalog row missing expected Matchbox stable entry"
 
 if grep -F 'pull	ghcr.io/techofourown/ourbox-matchbox-os@sha256:' "${ORAS_STUB_LOG}" >/dev/null; then

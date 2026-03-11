@@ -65,7 +65,9 @@ Key variables:
 - Floating refs are resolved to digests with `oras resolve` and pulled immutably by digest; the
   installer fails closed unless `OURBOX_ALLOW_UNRESOLVED_PULL=1` is set for development/testing.
 - Interactive options on boot:
-  - `c` choose channel (stable/beta/nightly/exp-labs/custom)
+  - `c` choose channel (stable/beta/nightly/exp-labs/custom); named lanes prefer the newest
+    digest-pinned catalog row and fall back to the lane tag only when catalog resolution is not
+    available
   - `l` list digest-pinned entries from `${OS_TARGET}-catalog` if present (newest first by `created`)
   - `r` enter custom ref (tag or digest)
   - `o` override OS payload repo/tag defaults interactively
@@ -101,4 +103,5 @@ Key variables:
 - Tag: `${OS_TARGET}-catalog`
 - Columns: `channel tag created version variant target sku git_sha platform_contract_digest k3s_version img_sha256 artifact_digest pinned_ref`
 - Kept up to date automatically by `tools/publish-os-artifact.sh` when channel tags are pushed.
+- `channel` stores the short release channel name (`stable`, `beta`, `nightly`, `exp-labs`).
 - Resolver behavior does not depend on append order; `created` is the tie-breaker.
