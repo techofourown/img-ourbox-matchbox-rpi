@@ -146,6 +146,8 @@ assert publish["control_fields"]["platform_contract_digest"] == override_digest
 assert publish["meta_env"]["OURBOX_PLATFORM_CONTRACT_DIGEST"] == override_digest
 assert override_digest in catalog
 assert raw_digest not in catalog
+assert "\nstable\t" in f"\n{catalog}"
+assert "\nrpi-stable\t" not in f"\n{catalog}"
 PY
 
 grep -F "techofourown.platform-contract.digest=${OVERRIDE_CONTRACT_DIGEST}" "${ORAS_STUB_LOG}" >/dev/null \
