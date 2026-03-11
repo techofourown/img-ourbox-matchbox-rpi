@@ -63,6 +63,29 @@ ourbox_selection_channel_tag() {
   printf '%s\n' "${tag}"
 }
 
+ourbox_selection_normalize_release_channel() {
+  local channel="${1:-}"
+  local target="${OS_TARGET:-}"
+
+  case "${channel}" in
+    stable|beta|nightly|exp-labs)
+      printf '%s\n' "${channel}"
+      return 0
+      ;;
+  esac
+
+  if [[ -n "${target}" ]]; then
+    case "${channel}" in
+      "${target}-stable") printf 'stable\n'; return 0 ;;
+      "${target}-beta") printf 'beta\n'; return 0 ;;
+      "${target}-nightly") printf 'nightly\n'; return 0 ;;
+      "${target}-exp-labs") printf 'exp-labs\n'; return 0 ;;
+    esac
+  fi
+
+  printf '%s\n' "${channel}"
+}
+
 ourbox_selection_load_remote_install_defaults() {
   local pull_dir="$1"
   local extract_dir="$2"
@@ -367,6 +390,7 @@ ourbox_selection_select_from_catalog_interactive() {
   local catalog_tsv=""
   local pick=""
   local chosen=""
+  local normalized_channel=""
   local channel=""
   local tag=""
   local created=""
@@ -410,10 +434,11 @@ ourbox_selection_select_from_catalog_interactive() {
 
   chosen="${entries[$((pick - 1))]}"
   IFS=$'\t' read -r channel tag created version contract pinned_ref <<<"${chosen}"
+  normalized_channel="$(ourbox_selection_normalize_release_channel "${channel}")"
   OURBOX_SELECTED_REF="${pinned_ref}"
   OURBOX_INSTALL_SELECTION_SOURCE="catalog"
-  OURBOX_RELEASE_CHANNEL="${channel}"
-  ourbox_selection_log "Selected ${OURBOX_SELECTED_REF} (channel=${channel}, version=${version}, contract=${contract})"
+  OURBOX_RELEASE_CHANNEL="${normalized_channel}"
+  ourbox_selection_log "Selected ${OURBOX_SELECTED_REF} (channel=${normalized_channel}, version=${version}, contract=${contract})"
 }
 
 ourbox_selection_prompt_custom_ref_interactive() {
