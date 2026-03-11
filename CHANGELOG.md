@@ -1,3 +1,16 @@
+# [0.13.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.12.0...v0.13.0) (2026-03-11)
+
+
+### Bug Fixes
+
+* address airgap review findings ([89c3217](https://github.com/techofourown/img-ourbox-matchbox/commit/89c32174acdb1db72393c4821cadcb3a528dfa2b))
+* clear lint and resolver sync failures ([5e9b67a](https://github.com/techofourown/img-ourbox-matchbox/commit/5e9b67a05b49720ff97c13d08e5d42098ec87a3d))
+
+
+### Features
+
+* add contract-bound airgap bundle selection ([71ee24e](https://github.com/techofourown/img-ourbox-matchbox/commit/71ee24ed2da39a2f252ce7f0e16110ccbe769b4b))
+
 # [0.12.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.4...v0.12.0) (2026-03-11)
 
 
