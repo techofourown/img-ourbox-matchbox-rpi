@@ -196,7 +196,9 @@ ourbox_selection_catalog_newest_ref() {
   local channel="$2"
   local row=""
 
-  row="$(ourbox_selection_catalog_entries "${catalog_tsv}" | awk -F'\t' -v ch="${channel}" '$1 == ch { print; exit }' || true)"
+  row="$(ourbox_selection_catalog_entries "${catalog_tsv}" | awk -F'\t' -v ch="${channel}" -v target="${OS_TARGET:-}" '
+    $1 == ch || (target != "" && ch ~ /^(stable|beta|nightly|exp-labs)$/ && $1 == target "-" ch) { print; exit }
+  ' || true)"
   [[ -n "${row}" ]] || return 1
   printf '%s\n' "${row##*$'\t'}"
 }

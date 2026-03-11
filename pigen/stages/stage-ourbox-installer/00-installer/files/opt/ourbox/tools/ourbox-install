@@ -195,7 +195,13 @@ show_install_plan() {
     echo "  DATA part   : ${MATCHBOX_DATA_PART}"
   fi
   echo "  OS artifact : ${OS_ARTIFACT_REF}"
+  echo "  Selection   : ${INSTALL_SELECTION_SOURCE:-unknown}"
+  if [[ -n "${RELEASE_CHANNEL}" ]]; then
+    echo "  Channel     : ${RELEASE_CHANNEL}"
+  fi
+  echo "  Digest      : ${OS_ARTIFACT_DIGEST:-unknown}"
   echo "  Payload SHA : ${PAYLOAD_SHA256}"
+  echo "  Contract    : ${OURBOX_PLATFORM_CONTRACT_DIGEST:-unknown}"
   echo "  Username    : ${IDENTITY_USERNAME}"
   if [[ "${MATCHBOX_SYSTEM_DISK_WAS_DATA}" == "1" ]]; then
     echo "  Note        : selected SYSTEM disk currently carries OURBOX_DATA and will be cleared"
@@ -209,7 +215,13 @@ show_completion_summary() {
   echo "  DATA disk   : ${MATCHBOX_DATA_DISK}"
   echo "  DATA action : ${MATCHBOX_DATA_ACTION_SUMMARY}"
   echo "  OS artifact : ${OS_ARTIFACT_REF}"
+  echo "  Selection   : ${INSTALL_SELECTION_SOURCE:-unknown}"
+  if [[ -n "${RELEASE_CHANNEL}" ]]; then
+    echo "  Channel     : ${RELEASE_CHANNEL}"
+  fi
+  echo "  Digest      : ${OS_ARTIFACT_DIGEST:-unknown}"
   echo "  Payload SHA : ${PAYLOAD_SHA256}"
+  echo "  Contract    : ${OURBOX_PLATFORM_CONTRACT_DIGEST:-unknown}"
   echo "  Username    : ${IDENTITY_USERNAME}"
   echo
 }
