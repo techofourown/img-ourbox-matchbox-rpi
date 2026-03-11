@@ -1,3 +1,15 @@
+# [0.12.0](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.4...v0.12.0) (2026-03-11)
+
+
+### Bug Fixes
+
+* confirm pinned browse selections before install ([234794c](https://github.com/techofourown/img-ourbox-matchbox/commit/234794cbfb32be4b9de6c17f87d579fc68d5b538))
+
+
+### Features
+
+* adopt shared installer selection browsing ([706daca](https://github.com/techofourown/img-ourbox-matchbox/commit/706daca280f53229d3db3282a0ff6a91d41b4258))
+
 ## [0.11.4](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.11.3...v0.11.4) (2026-03-10)
 
 
