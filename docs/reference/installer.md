@@ -62,6 +62,9 @@ Key variables:
   4) `${OS_REPO}:<tag for OS_CHANNEL>` fallback (stable/beta/nightly/exp-labs mapping)
 - Catalog resolution is row-order independent: it filters by channel, requires a digest-pinned
   `pinned_ref`, and picks the newest row by `created`.
+- During the channel-name migration, the resolver also accepts legacy target-qualified catalog rows
+  such as `rpi-stable`, but installed provenance and installer summaries normalize those back to
+  the short release-channel vocabulary (`stable`, `beta`, `nightly`, `exp-labs`).
 - Floating refs are resolved to digests with `oras resolve` and pulled immutably by digest; the
   installer fails closed unless `OURBOX_ALLOW_UNRESOLVED_PULL=1` is set for development/testing.
 - Interactive options on boot:
@@ -104,4 +107,6 @@ Key variables:
 - Columns: `channel tag created version variant target sku git_sha platform_contract_digest k3s_version img_sha256 artifact_digest pinned_ref`
 - Kept up to date automatically by `tools/publish-os-artifact.sh` when channel tags are pushed.
 - `channel` stores the short release channel name (`stable`, `beta`, `nightly`, `exp-labs`).
+- The resolver still accepts legacy target-qualified rows during the migration window, but
+  `OURBOX_RELEASE_CHANNEL` remains normalized to the short names above.
 - Resolver behavior does not depend on append order; `created` is the tie-breaker.
