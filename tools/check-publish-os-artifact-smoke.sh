@@ -20,13 +20,18 @@ mkdir -p "${DEPLOY_DIR}" "${BIN_DIR}" "${STATE_DIR}"
 CONTRACT_DIGEST_FILE="${ROOT}/pigen/stages/stage-ourbox-matchbox/02-airgap-platform/files/opt/ourbox/airgap/platform/contract.digest"
 CONTRACT_ENV_FILE="${ROOT}/pigen/stages/stage-ourbox-matchbox/02-airgap-platform/files/opt/ourbox/airgap/platform/contract.env"
 AIRGAP_MANIFEST="${ROOT}/artifacts/airgap/manifest.env"
+AIRGAP_SELECTED_BUNDLE_ENV="${ROOT}/artifacts/airgap/selected-bundle.env"
+AIRGAP_BUNDLE_DIGEST="sha256:3333333333333333333333333333333333333333333333333333333333333333"
+AIRGAP_LOCK_SHA="4444444444444444444444444444444444444444444444444444444444444444"
 
 had_contract_digest=0
 had_contract_env=0
 had_airgap_manifest=0
+had_airgap_selected_bundle=0
 backup_contract_digest="${TMP}/contract.digest.bak"
 backup_contract_env="${TMP}/contract.env.bak"
 backup_airgap_manifest="${TMP}/manifest.env.bak"
+backup_airgap_selected_bundle="${TMP}/selected-bundle.env.bak"
 
 cleanup() {
   if [[ "${had_contract_digest}" == "1" ]]; then
@@ -47,6 +52,12 @@ cleanup() {
     rm -f "${AIRGAP_MANIFEST}"
   fi
 
+  if [[ "${had_airgap_selected_bundle}" == "1" ]]; then
+    cp -a "${backup_airgap_selected_bundle}" "${AIRGAP_SELECTED_BUNDLE_ENV}"
+  else
+    rm -f "${AIRGAP_SELECTED_BUNDLE_ENV}"
+  fi
+
   rm -rf "${TMP}"
 }
 trap cleanup EXIT
@@ -63,6 +74,10 @@ if [[ -f "${AIRGAP_MANIFEST}" ]]; then
   had_airgap_manifest=1
   cp -a "${AIRGAP_MANIFEST}" "${backup_airgap_manifest}"
 fi
+if [[ -f "${AIRGAP_SELECTED_BUNDLE_ENV}" ]]; then
+  had_airgap_selected_bundle=1
+  cp -a "${AIRGAP_SELECTED_BUNDLE_ENV}" "${backup_airgap_selected_bundle}"
+fi
 
 mkdir -p "$(dirname "${CONTRACT_DIGEST_FILE}")" "$(dirname "${AIRGAP_MANIFEST}")"
 printf '%s\n' "${RAW_CONTRACT_DIGEST}" > "${CONTRACT_DIGEST_FILE}"
@@ -73,7 +88,31 @@ OURBOX_PLATFORM_CONTRACT_VERSION=v0.0.0-fixture
 OURBOX_PLATFORM_CONTRACT_CREATED=2026-03-09T00:00:00Z
 EOF
 cat > "${AIRGAP_MANIFEST}" <<EOF
+OURBOX_AIRGAP_PLATFORM_SOURCE=https://github.com/techofourown/sw-ourbox-os
+OURBOX_AIRGAP_PLATFORM_REVISION=fixture-airgap-revision
+OURBOX_AIRGAP_PLATFORM_VERSION=v0.0.0-airgap-fixture
+OURBOX_AIRGAP_PLATFORM_CREATED=2026-03-09T00:00:00Z
+OURBOX_PLATFORM_CONTRACT_REF=ghcr.io/techofourown/sw-ourbox-os/platform-contract@${RAW_CONTRACT_DIGEST}
+OURBOX_PLATFORM_CONTRACT_DIGEST=${RAW_CONTRACT_DIGEST}
+AIRGAP_PLATFORM_ARCH=arm64
 K3S_VERSION=${FIXTURE_K3S_VERSION}
+OURBOX_PLATFORM_PROFILE=demo-apps
+OURBOX_PLATFORM_IMAGES_LOCK_PATH=platform/images.lock.json
+OURBOX_PLATFORM_IMAGES_LOCK_SHA256=${AIRGAP_LOCK_SHA}
+EOF
+cat > "${AIRGAP_SELECTED_BUNDLE_ENV}" <<EOF
+OURBOX_AIRGAP_PLATFORM_REF=ghcr.io/techofourown/sw-ourbox-os/airgap-platform@${AIRGAP_BUNDLE_DIGEST}
+OURBOX_AIRGAP_PLATFORM_DIGEST=${AIRGAP_BUNDLE_DIGEST}
+OURBOX_AIRGAP_PLATFORM_SOURCE=https://github.com/techofourown/sw-ourbox-os
+OURBOX_AIRGAP_PLATFORM_REVISION=fixture-airgap-revision
+OURBOX_AIRGAP_PLATFORM_VERSION=v0.0.0-airgap-fixture
+OURBOX_AIRGAP_PLATFORM_CREATED=2026-03-09T00:00:00Z
+OURBOX_AIRGAP_PLATFORM_ARCH=arm64
+OURBOX_AIRGAP_PLATFORM_PROFILE=demo-apps
+OURBOX_AIRGAP_PLATFORM_K3S_VERSION=${FIXTURE_K3S_VERSION}
+OURBOX_AIRGAP_PLATFORM_IMAGES_LOCK_SHA256=${AIRGAP_LOCK_SHA}
+OURBOX_PLATFORM_CONTRACT_REF=ghcr.io/techofourown/sw-ourbox-os/platform-contract@${RAW_CONTRACT_DIGEST}
+OURBOX_PLATFORM_CONTRACT_DIGEST=${RAW_CONTRACT_DIGEST}
 EOF
 
 printf 'fixture os image\n' > "${DEPLOY_DIR}/img-ourbox-matchbox-rpi-fixture.img.xz"
@@ -128,11 +167,11 @@ export OURBOX_PLATFORM_CONTRACT_DIGEST="${OVERRIDE_CONTRACT_DIGEST}"
 
 "${ROOT}/tools/publish-os-artifact.sh" "${DEPLOY_DIR}"
 
-python3 - "${DEPLOY_DIR}/os-artifact.meta.json" "${DEPLOY_DIR}/os-artifact.publish.json" "${STATE_DIR}/latest-catalog.tsv" "${OVERRIDE_CONTRACT_DIGEST}" "${RAW_CONTRACT_DIGEST}" <<'PY'
+python3 - "${DEPLOY_DIR}/os-artifact.meta.json" "${DEPLOY_DIR}/os-artifact.publish.json" "${STATE_DIR}/latest-catalog.tsv" "${OVERRIDE_CONTRACT_DIGEST}" "${RAW_CONTRACT_DIGEST}" "${AIRGAP_BUNDLE_DIGEST}" "${AIRGAP_LOCK_SHA}" "${FIXTURE_K3S_VERSION}" <<'PY'
 import json
 import sys
 
-meta_path, publish_path, catalog_path, override_digest, raw_digest = sys.argv[1:]
+meta_path, publish_path, catalog_path, override_digest, raw_digest, airgap_digest, lock_sha, k3s_version = sys.argv[1:]
 
 with open(meta_path, "r", encoding="utf-8") as fh:
     meta = json.load(fh)
@@ -142,8 +181,17 @@ with open(catalog_path, "r", encoding="utf-8") as fh:
     catalog = fh.read()
 
 assert meta["OURBOX_PLATFORM_CONTRACT_DIGEST"] == override_digest
+assert meta["OURBOX_AIRGAP_PLATFORM_REF"] == f"ghcr.io/techofourown/sw-ourbox-os/airgap-platform@{airgap_digest}"
+assert meta["OURBOX_AIRGAP_PLATFORM_DIGEST"] == airgap_digest
+assert meta["OURBOX_AIRGAP_PLATFORM_SOURCE"] == "https://github.com/techofourown/sw-ourbox-os"
+assert meta["OURBOX_AIRGAP_PLATFORM_ARCH"] == "arm64"
+assert meta["OURBOX_AIRGAP_PLATFORM_PROFILE"] == "demo-apps"
+assert meta["OURBOX_AIRGAP_PLATFORM_K3S_VERSION"] == k3s_version
+assert meta["OURBOX_AIRGAP_PLATFORM_IMAGES_LOCK_SHA256"] == lock_sha
 assert publish["control_fields"]["platform_contract_digest"] == override_digest
 assert publish["meta_env"]["OURBOX_PLATFORM_CONTRACT_DIGEST"] == override_digest
+assert publish["meta_env"]["OURBOX_AIRGAP_PLATFORM_DIGEST"] == airgap_digest
+assert publish["meta_env"]["OURBOX_AIRGAP_PLATFORM_K3S_VERSION"] == k3s_version
 assert override_digest in catalog
 assert raw_digest not in catalog
 assert "\nstable\t" in f"\n{catalog}"

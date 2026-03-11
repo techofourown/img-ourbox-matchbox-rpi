@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "OURBOX_PLATFORM_CONTRACT_REF=ghcr.io/techofourown/sw-ourbox-os/platform-contract@$(oras resolve ghcr.io/techofourown/sw-ourbox-os/platform-contract:edge)" >> "${GITHUB_ENV}"
-          echo "OURBOX_AIRGAP_PLATFORM_REF=ghcr.io/techofourown/sw-ourbox-os/airgap-platform@$(oras resolve ghcr.io/techofourown/sw-ourbox-os/airgap-platform:edge-arm64)" >> "${GITHUB_ENV}"
+          echo "OURBOX_AIRGAP_PLATFORM_REF=ghcr.io/techofourown/sw-ourbox-os/airgap-platform@$(oras resolve ghcr.io/techofourown/sw-ourbox-os/airgap-platform:nightly-arm64)" >> "${GITHUB_ENV}"
 
       - name: Fetch nightly upstream inputs
         run: ./tools/fetch-airgap-platform.sh
@@ -72,6 +72,8 @@ jobs:
           OS_REPO: ghcr.io/techofourown/ourbox-matchbox-os
           OS_CHANNEL: nightly
           OS_DEFAULT_REF: ${{ env.OS_DEFAULT_REF }}
+          AIRGAP_PLATFORM_CHANNEL: nightly
+          AIRGAP_PLATFORM_DEFAULT_REF: ${{ env.OURBOX_AIRGAP_PLATFORM_REF }}
           INSTALL_DEFAULTS_REF: ""
           OURBOX_REQUIRE_EXPLICIT_VERSION: "1"
           OURBOX_REQUIRE_OS_DEFAULT_REF: "1"
@@ -84,6 +86,7 @@ jobs:
         env:
           OURBOX_TARGET: rpi
           EXPECTED_OS_DEFAULT_REF: ${{ env.OS_DEFAULT_REF }}
+          EXPECTED_AIRGAP_PLATFORM_DEFAULT_REF: ${{ env.OURBOX_AIRGAP_PLATFORM_REF }}
 
       - name: Publish installer artifact (integration nightly)
         run: ./tools/publish-installer-artifact-official.sh nightly

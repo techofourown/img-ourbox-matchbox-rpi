@@ -18,17 +18,50 @@ ourbox_selection_need_cmd() {
   command -v "$1" >/dev/null 2>&1 || ourbox_selection_die "missing required command: $1"
 }
 
+ourbox_selection_reset_lane_state() {
+  local selection_source_var="$1"
+  local release_channel_var="$2"
+  local catalog_ref_var="$3"
+  local selected_ref_var="$4"
+  local pull_ref_var="$5"
+  local artifact_source_var="$6"
+  local artifact_ref_var="$7"
+  local artifact_digest_var="$8"
+
+  printf -v "${selection_source_var}" '%s' ""
+  printf -v "${release_channel_var}" '%s' ""
+  printf -v "${catalog_ref_var}" '%s' ""
+  printf -v "${selected_ref_var}" '%s' ""
+  printf -v "${pull_ref_var}" '%s' ""
+  printf -v "${artifact_source_var}" '%s' "registry"
+  printf -v "${artifact_ref_var}" '%s' ""
+  printf -v "${artifact_digest_var}" '%s' ""
+}
+
 ourbox_selection_reset_state() {
   OURBOX_INSTALL_DEFAULTS_SOURCE="baked"
   OURBOX_INSTALL_DEFAULTS_PROFILE=""
-  OURBOX_INSTALL_SELECTION_SOURCE=""
-  OURBOX_RELEASE_CHANNEL=""
-  OURBOX_CATALOG_REF=""
-  OURBOX_SELECTED_REF=""
-  OURBOX_PULL_REF=""
-  OURBOX_OS_ARTIFACT_SOURCE="registry"
-  OURBOX_OS_ARTIFACT_REF=""
-  OURBOX_OS_ARTIFACT_DIGEST=""
+  ourbox_selection_reset_lane_state \
+    OURBOX_INSTALL_SELECTION_SOURCE \
+    OURBOX_RELEASE_CHANNEL \
+    OURBOX_CATALOG_REF \
+    OURBOX_SELECTED_REF \
+    OURBOX_PULL_REF \
+    OURBOX_OS_ARTIFACT_SOURCE \
+    OURBOX_OS_ARTIFACT_REF \
+    OURBOX_OS_ARTIFACT_DIGEST
+}
+
+ourbox_airgap_platform_selection_reset_state() {
+  ourbox_selection_reset_lane_state \
+    OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE \
+    OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL \
+    OURBOX_AIRGAP_PLATFORM_CATALOG_REF \
+    OURBOX_AIRGAP_PLATFORM_SELECTED_REF \
+    OURBOX_AIRGAP_PLATFORM_PULL_REF \
+    OURBOX_AIRGAP_PLATFORM_ARTIFACT_SOURCE \
+    OURBOX_AIRGAP_PLATFORM_ARTIFACT_REF \
+    OURBOX_AIRGAP_PLATFORM_ARTIFACT_DIGEST
 }
 
 ourbox_selection_is_clean_single_line_ref() {
@@ -45,6 +78,12 @@ ourbox_selection_is_digest_pinned_ref() {
   local ref="${1:-}"
   ourbox_selection_is_clean_single_line_ref "${ref}" || return 1
   [[ "${ref}" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]] || return 1
+  return 0
+}
+
+ourbox_selection_is_sha256_digest() {
+  local digest="${1:-}"
+  [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
   return 0
 }
 
@@ -91,6 +130,7 @@ ourbox_selection_load_remote_install_defaults() {
   local extract_dir="$2"
   local override_env="${3:-}"
   local baked_os_default_ref="${OS_DEFAULT_REF:-}"
+  local baked_airgap_default_ref="${AIRGAP_PLATFORM_DEFAULT_REF:-}"
   local expected_installer_id="${INSTALLER_ID:-}"
 
   OURBOX_INSTALL_DEFAULTS_SOURCE="baked"
@@ -155,6 +195,9 @@ ourbox_selection_load_remote_install_defaults() {
   # explicitly replaces it with another non-empty ref.
   if [[ -n "${baked_os_default_ref}" && -z "${OS_DEFAULT_REF:-}" ]]; then
     OS_DEFAULT_REF="${baked_os_default_ref}"
+  fi
+  if [[ -n "${baked_airgap_default_ref}" && -z "${AIRGAP_PLATFORM_DEFAULT_REF:-}" ]]; then
+    AIRGAP_PLATFORM_DEFAULT_REF="${baked_airgap_default_ref}"
   fi
 
   # shellcheck disable=SC2034  # output state consumed by the sourcing installer
@@ -297,9 +340,9 @@ ourbox_selection_show_default_choice() {
   local ref="$1"
 
   echo
-  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE}" == "remote" ]]; then
-    echo "Install defaults: remote (${INSTALL_DEFAULTS_REF})"
-    echo "Profile        : ${OURBOX_INSTALL_DEFAULTS_PROFILE}"
+  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE:-baked}" == "remote" ]]; then
+    echo "Install defaults: remote (${INSTALL_DEFAULTS_REF:-})"
+    echo "Profile        : ${OURBOX_INSTALL_DEFAULTS_PROFILE:-}"
   else
     echo "Install defaults: baked defaults"
   fi
@@ -525,39 +568,42 @@ ourbox_selection_ref_repo_base() {
   fi
 }
 
-ourbox_selection_finalize_registry_ref() {
+ourbox_selection_finalize_registry_ref_common() {
   local selected_ref="$1"
+  local selected_ref_var="$2"
+  local pull_ref_var="$3"
+  local artifact_source_var="$4"
+  local artifact_ref_var="$5"
+  local artifact_digest_var="$6"
+  local label="${7:-artifact}"
   local selected_ref_q=""
   local resolved_digest=""
   local repo_base=""
 
   if ! ourbox_selection_is_clean_single_line_ref "${selected_ref}"; then
     printf -v selected_ref_q '%q' "${selected_ref}"
-    ourbox_selection_die "invalid selected OS artifact ref (must be non-empty, single-line, no whitespace): ${selected_ref_q}"
+    ourbox_selection_die "invalid selected ${label} ref (must be non-empty, single-line, no whitespace): ${selected_ref_q}"
   fi
 
   ourbox_selection_need_cmd oras
 
-  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
-  OURBOX_SELECTED_REF="${selected_ref}"
-  OURBOX_PULL_REF="${selected_ref}"
-  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
-  OURBOX_OS_ARTIFACT_SOURCE="registry"
-  # shellcheck disable=SC2034  # output state consumed by the sourcing installer
-  OURBOX_OS_ARTIFACT_REF="${selected_ref}"
-  OURBOX_OS_ARTIFACT_DIGEST=""
+  printf -v "${selected_ref_var}" '%s' "${selected_ref}"
+  printf -v "${pull_ref_var}" '%s' "${selected_ref}"
+  printf -v "${artifact_source_var}" '%s' "registry"
+  printf -v "${artifact_ref_var}" '%s' "${selected_ref}"
+  printf -v "${artifact_digest_var}" '%s' ""
 
   if ourbox_selection_is_digest_pinned_ref "${selected_ref}"; then
-    OURBOX_OS_ARTIFACT_DIGEST="${selected_ref##*@}"
+    printf -v "${artifact_digest_var}" '%s' "${selected_ref##*@}"
     return 0
   fi
 
   ourbox_selection_log "Resolving to immutable digest: ${selected_ref}"
   if resolved_digest="$(oras resolve "${selected_ref}" 2>/dev/null)" \
     && [[ "${resolved_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-    OURBOX_OS_ARTIFACT_DIGEST="${resolved_digest}"
+    printf -v "${artifact_digest_var}" '%s' "${resolved_digest}"
     repo_base="$(ourbox_selection_ref_repo_base "${selected_ref}")"
-    OURBOX_PULL_REF="${repo_base}@${resolved_digest}"
+    printf -v "${pull_ref_var}" '%s' "${repo_base}@${resolved_digest}"
     ourbox_selection_log "Resolved: ${resolved_digest}"
     return 0
   fi
@@ -565,17 +611,473 @@ ourbox_selection_finalize_registry_ref() {
   if [[ "${OURBOX_ALLOW_UNRESOLVED_PULL:-0}" == "1" ]]; then
     ourbox_selection_log "WARNING: oras resolve failed; pulling by tag (OURBOX_ALLOW_UNRESOLVED_PULL=1)"
     ourbox_selection_log "WARNING: artifact identity will not be captured in provenance"
-    # shellcheck disable=SC2034  # output state consumed by the sourcing installer
-    OURBOX_OS_ARTIFACT_DIGEST="unresolved"
-    # shellcheck disable=SC2034  # output state consumed by the sourcing installer
-    OURBOX_PULL_REF="${selected_ref}"
+    printf -v "${artifact_digest_var}" '%s' "unresolved"
+    printf -v "${pull_ref_var}" '%s' "${selected_ref}"
     return 0
   fi
 
-  ourbox_selection_die "Cannot establish artifact identity: oras resolve failed for ${selected_ref}
+  ourbox_selection_die "Cannot establish ${label} identity: oras resolve failed for ${selected_ref}
   The installer requires a digest-pinned artifact ref to ensure provenance.
   Options:
-    1. Use a digest-pinned ref (catalog or OS_DEFAULT_REF usually provides this)
+    1. Use a digest-pinned ref (catalog or baked default usually provides this)
     2. Check registry connectivity and retry
     3. Set OURBOX_ALLOW_UNRESOLVED_PULL=1 to skip this check (dev/testing only)"
+}
+
+ourbox_selection_finalize_registry_ref() {
+  local selected_ref="$1"
+  ourbox_selection_finalize_registry_ref_common \
+    "${selected_ref}" \
+    OURBOX_SELECTED_REF \
+    OURBOX_PULL_REF \
+    OURBOX_OS_ARTIFACT_SOURCE \
+    OURBOX_OS_ARTIFACT_REF \
+    OURBOX_OS_ARTIFACT_DIGEST \
+    "OS artifact"
+}
+
+ourbox_airgap_platform_selection_channel_tag() {
+  local channel="${1:-}"
+  local arch="${AIRGAP_PLATFORM_ARCH:-}"
+  local tag=""
+
+  case "${channel}" in
+    stable) tag="${AIRGAP_PLATFORM_CHANNEL_STABLE_TAG:-}"; [[ -n "${tag}" ]] || tag="stable-${arch}" ;;
+    beta) tag="${AIRGAP_PLATFORM_CHANNEL_BETA_TAG:-}"; [[ -n "${tag}" ]] || tag="beta-${arch}" ;;
+    nightly) tag="${AIRGAP_PLATFORM_CHANNEL_NIGHTLY_TAG:-}"; [[ -n "${tag}" ]] || tag="nightly-${arch}" ;;
+    exp-labs) tag="${AIRGAP_PLATFORM_CHANNEL_EXP_LABS_TAG:-}"; [[ -n "${tag}" ]] || tag="exp-labs-${arch}" ;;
+    *) tag="${channel}-${arch}" ;;
+  esac
+  [[ -n "${tag}" ]] || ourbox_selection_die "unable to resolve airgap-platform channel tag for '${channel}'"
+  printf '%s\n' "${tag}"
+}
+
+ourbox_airgap_platform_selection_require_context() {
+  local required_contract_digest="${1:-}"
+
+  [[ -n "${AIRGAP_PLATFORM_REPO:-}" ]] || ourbox_selection_die "AIRGAP_PLATFORM_REPO is required for airgap-platform selection"
+  [[ "${AIRGAP_PLATFORM_ARCH:-}" =~ ^(arm64|amd64)$ ]] || ourbox_selection_die "AIRGAP_PLATFORM_ARCH must be arm64 or amd64 for airgap-platform selection"
+  [[ -n "${AIRGAP_PLATFORM_CHANNEL:-}" ]] || ourbox_selection_die "AIRGAP_PLATFORM_CHANNEL is required for airgap-platform selection"
+  ourbox_selection_is_sha256_digest "${required_contract_digest}" || ourbox_selection_die "required platform contract digest must be a sha256:<64 hex> for airgap-platform selection"
+}
+
+ourbox_airgap_platform_selection_pull_catalog() {
+  local dst="$1"
+  local ref="${AIRGAP_PLATFORM_REPO}:${AIRGAP_PLATFORM_CATALOG_TAG}"
+
+  if [[ "${AIRGAP_PLATFORM_CATALOG_ENABLED:-1}" != "1" ]]; then
+    return 1
+  fi
+
+  ourbox_selection_need_cmd oras
+  rm -rf "${dst}"
+  mkdir -p "${dst}"
+
+  ourbox_selection_log "Pulling airgap catalog: ${ref}"
+  if ! oras pull "${ref}" -o "${dst}" >/dev/null 2>&1; then
+    return 1
+  fi
+  [[ -f "${dst}/catalog.tsv" ]] || return 1
+
+  OURBOX_AIRGAP_PLATFORM_CATALOG_REF="${ref}"
+  return 0
+}
+
+ourbox_airgap_platform_catalog_entries() {
+  local catalog_tsv="$1"
+  [[ -f "${catalog_tsv}" ]] || return 1
+
+  awk -F'\t' '
+    NR == 1 {
+      for (i = 1; i <= NF; i++) {
+        idx[$i] = i
+      }
+      if (!idx["channel"] || !idx["tag"] || !idx["created"] || !idx["version"] || !idx["revision"] || !idx["arch"] || !idx["platform_contract_digest"] || !idx["platform_profile"] || !idx["k3s_version"] || !idx["platform_images_lock_sha256"] || !idx["artifact_digest"] || !idx["pinned_ref"]) {
+        exit 0
+      }
+      next
+    }
+    {
+      created = $(idx["created"])
+      arch = $(idx["arch"])
+      contract = $(idx["platform_contract_digest"])
+      lock_sha = $(idx["platform_images_lock_sha256"])
+      digest = $(idx["artifact_digest"])
+      pinned = $(idx["pinned_ref"])
+      if (created == "" || arch == "" || contract == "") {
+        next
+      }
+      if (arch !~ /^(arm64|amd64)$/) {
+        next
+      }
+      if (contract !~ /^sha256:[0-9a-f]{64}$/) {
+        next
+      }
+      if (lock_sha !~ /^[0-9a-f]{64}$/) {
+        next
+      }
+      if (digest !~ /^sha256:[0-9a-f]{64}$/) {
+        next
+      }
+      if (pinned !~ /^[^[:space:]]+@sha256:[0-9a-f]{64}$/) {
+        next
+      }
+      print $(idx["channel"]) "\t" $(idx["tag"]) "\t" created "\t" $(idx["version"]) "\t" $(idx["revision"]) "\t" arch "\t" contract "\t" $(idx["platform_profile"]) "\t" $(idx["k3s_version"]) "\t" $(idx["platform_images_lock_sha256"]) "\t" digest "\t" pinned
+    }
+  ' "${catalog_tsv}" | sort -t $'\t' -k3,3r -k2,2r
+}
+
+ourbox_airgap_platform_catalog_newest_ref() {
+  local catalog_tsv="$1"
+  local channel="$2"
+  local required_contract_digest="$3"
+  local required_arch="$4"
+  local row=""
+
+  row="$(ourbox_airgap_platform_catalog_entries "${catalog_tsv}" | awk -F'\t' -v ch="${channel}" -v digest="${required_contract_digest}" -v arch="${required_arch}" '
+    $1 == ch && $6 == arch && $7 == digest { print; exit }
+  ' || true)"
+  [[ -n "${row}" ]] || return 1
+  printf '%s\n' "${row##*$'\t'}"
+}
+
+ourbox_airgap_platform_determine_default_ref() {
+  local catalog_dir="$1"
+  local required_contract_digest="$2"
+  local channel_tag_ref=""
+  local catalog_tsv=""
+  local catalog_ref=""
+
+  ourbox_airgap_platform_selection_require_context "${required_contract_digest}"
+
+  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE=""
+  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL=""
+  OURBOX_AIRGAP_PLATFORM_SELECTED_REF=""
+  OURBOX_AIRGAP_PLATFORM_CATALOG_REF=""
+
+  if [[ -n "${AIRGAP_PLATFORM_REF:-}" ]]; then
+    OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="airgap-platform-ref"
+    OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${AIRGAP_PLATFORM_REF}"
+    return 0
+  fi
+
+  if [[ -n "${AIRGAP_PLATFORM_DEFAULT_REF:-}" ]]; then
+    OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="airgap-platform-default-ref"
+    OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${AIRGAP_PLATFORM_DEFAULT_REF}"
+    return 0
+  fi
+
+  channel_tag_ref="${AIRGAP_PLATFORM_REPO}:$(ourbox_airgap_platform_selection_channel_tag "${AIRGAP_PLATFORM_CHANNEL}")"
+
+  if [[ "${AIRGAP_PLATFORM_CATALOG_ENABLED:-1}" == "1" ]]; then
+    if ourbox_airgap_platform_selection_pull_catalog "${catalog_dir}"; then
+      catalog_tsv="${catalog_dir}/catalog.tsv"
+      catalog_ref="$(ourbox_airgap_platform_catalog_newest_ref "${catalog_tsv}" "${AIRGAP_PLATFORM_CHANNEL}" "${required_contract_digest}" "${AIRGAP_PLATFORM_ARCH:-}" || true)"
+      if ourbox_selection_is_digest_pinned_ref "${catalog_ref}"; then
+        OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="catalog"
+        OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${AIRGAP_PLATFORM_CHANNEL}"
+        OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${catalog_ref}"
+        return 0
+      fi
+      ourbox_selection_log "Airgap catalog has no valid digest-pinned entry for channel '${AIRGAP_PLATFORM_CHANNEL}' and contract '${required_contract_digest}'; falling back to channel tag."
+    else
+      ourbox_selection_log "Airgap catalog unavailable; falling back to channel tag."
+    fi
+  fi
+
+  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="channel-tag"
+  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${AIRGAP_PLATFORM_CHANNEL}"
+  OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${channel_tag_ref}"
+}
+
+ourbox_airgap_platform_selection_show_default_choice() {
+  local ref="$1"
+
+  echo
+  if [[ "${OURBOX_INSTALL_DEFAULTS_SOURCE:-baked}" == "remote" ]]; then
+    echo "Install defaults: remote (${INSTALL_DEFAULTS_REF:-})"
+    echo "Profile        : ${OURBOX_INSTALL_DEFAULTS_PROFILE:-}"
+  else
+    echo "Install defaults: baked defaults"
+  fi
+  echo "Default source : ${OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE:-pending}"
+  echo "Default: use airgap bundle '${ref}'"
+  echo "Options:"
+  echo "  [ENTER] Use default"
+  echo "  c       Choose channel (prefers newest contract-matching catalog row for that lane)"
+  echo "  l       List from catalog (if available)"
+  echo "  r       Enter custom OCI ref (tag or digest)"
+  echo "  o       Override airgap repo (custom registry/fork)"
+  echo "  q       Quit"
+  echo
+}
+
+ourbox_airgap_platform_selection_override_repo_interactive() {
+  local next_repo=""
+  local next_catalog="catalog-${AIRGAP_PLATFORM_ARCH}"
+  local user_catalog=""
+
+  read -r -p "Enter OCI repo (e.g., ghcr.io/org/airgap-platform): " next_repo
+  [[ -n "${next_repo}" ]] || {
+    ourbox_selection_log "Repository cannot be empty."
+    return 1
+  }
+
+  AIRGAP_PLATFORM_REPO="${next_repo}"
+  AIRGAP_PLATFORM_REF=""
+  AIRGAP_PLATFORM_DEFAULT_REF=""
+
+  read -r -p "Catalog tag [${next_catalog}]: " user_catalog
+  if [[ -n "${user_catalog}" ]]; then
+    AIRGAP_PLATFORM_CATALOG_TAG="${user_catalog}"
+  else
+    AIRGAP_PLATFORM_CATALOG_TAG="${next_catalog}"
+  fi
+
+  ourbox_selection_log "Airgap repo override set to ${AIRGAP_PLATFORM_REPO}"
+}
+
+ourbox_airgap_platform_selection_choose_channel_interactive() {
+  local catalog_dir="$1"
+  local required_contract_digest="$2"
+  local pick=""
+  local custom_tag=""
+
+  echo "Channels:"
+  echo "  1) stable (${AIRGAP_PLATFORM_CHANNEL_STABLE_TAG:-$(ourbox_airgap_platform_selection_channel_tag stable)}) (recommended)"
+  echo "  2) beta (${AIRGAP_PLATFORM_CHANNEL_BETA_TAG:-$(ourbox_airgap_platform_selection_channel_tag beta)})"
+  echo "  3) nightly (${AIRGAP_PLATFORM_CHANNEL_NIGHTLY_TAG:-$(ourbox_airgap_platform_selection_channel_tag nightly)})"
+  echo "  4) exp-labs (${AIRGAP_PLATFORM_CHANNEL_EXP_LABS_TAG:-$(ourbox_airgap_platform_selection_channel_tag exp-labs)})"
+  echo "  5) custom tag name"
+
+  read -r -p "Select channel [1-5]: " pick
+  case "${pick}" in
+    1|"") AIRGAP_PLATFORM_CHANNEL="stable" ;;
+    2) AIRGAP_PLATFORM_CHANNEL="beta" ;;
+    3) AIRGAP_PLATFORM_CHANNEL="nightly" ;;
+    4) AIRGAP_PLATFORM_CHANNEL="exp-labs" ;;
+    5)
+      read -r -p "Enter tag: " custom_tag
+      [[ -n "${custom_tag}" ]] || {
+        ourbox_selection_log "Tag cannot be empty."
+        return 1
+      }
+      OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${AIRGAP_PLATFORM_REPO}:${custom_tag}"
+      OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="channel-tag"
+      OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL=""
+      return 0
+      ;;
+    *)
+      ourbox_selection_log "Invalid choice."
+      return 1
+      ;;
+  esac
+
+  ourbox_airgap_platform_determine_default_ref "${catalog_dir}" "${required_contract_digest}"
+}
+
+ourbox_airgap_platform_selection_select_from_catalog_interactive() {
+  local catalog_dir="$1"
+  local required_contract_digest="$2"
+  local catalog_tsv=""
+  local pick=""
+  local chosen=""
+  local channel=""
+  local tag=""
+  local created=""
+  local version=""
+  local revision=""
+  local arch=""
+  local contract=""
+  local profile=""
+  local k3s_version=""
+  local lock_sha=""
+  local artifact_digest=""
+  local pinned_ref=""
+  local i=1
+  local -a entries=()
+
+  OURBOX_AIRGAP_PLATFORM_CATALOG_REF=""
+  ourbox_airgap_platform_selection_pull_catalog "${catalog_dir}" || {
+    ourbox_selection_log "Airgap catalog unavailable; skipping list."
+    return 1
+  }
+
+  catalog_tsv="${catalog_dir}/catalog.tsv"
+  mapfile -t entries < <(ourbox_airgap_platform_catalog_entries "${catalog_tsv}" | awk -F'\t' -v digest="${required_contract_digest}" -v arch="${AIRGAP_PLATFORM_ARCH:-}" '
+    $6 == arch && $7 == digest { print }
+  ')
+  if [[ "${#entries[@]}" -eq 0 ]]; then
+    ourbox_selection_log "Airgap catalog pulled (${OURBOX_AIRGAP_PLATFORM_CATALOG_REF}) but contained no matching rows for arch=${AIRGAP_PLATFORM_ARCH:-unknown} contract=${required_contract_digest}."
+    return 1
+  fi
+
+  echo
+  echo "Airgap catalog entries (${OURBOX_AIRGAP_PLATFORM_CATALOG_REF}):"
+  for chosen in "${entries[@]}"; do
+    IFS=$'\t' read -r channel tag created version revision arch contract profile k3s_version lock_sha artifact_digest pinned_ref <<<"${chosen}"
+    printf "  %d) %-10s %-24s %s %s %s\n" "${i}" "${channel}" "${tag}" "${version}" "${created}" "${contract}"
+    i=$((i + 1))
+  done
+
+  read -r -p "Choose entry [1-${#entries[@]}] (or ENTER to cancel): " pick
+  [[ -n "${pick}" ]] || return 1
+  [[ "${pick}" =~ ^[0-9]+$ ]] || {
+    ourbox_selection_log "Invalid selection."
+    return 1
+  }
+  if (( pick < 1 || pick > ${#entries[@]} )); then
+    ourbox_selection_log "Selection out of range."
+    return 1
+  fi
+
+  chosen="${entries[$((pick - 1))]}"
+  IFS=$'\t' read -r channel tag created version revision arch contract profile k3s_version lock_sha artifact_digest pinned_ref <<<"${chosen}"
+  OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${pinned_ref}"
+  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="catalog"
+  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${channel}"
+  ourbox_selection_log "Selected ${OURBOX_AIRGAP_PLATFORM_SELECTED_REF} (channel=${channel}, version=${version}, contract=${contract})"
+}
+
+ourbox_airgap_platform_selection_prompt_custom_ref_interactive() {
+  local ref=""
+
+  read -r -p "Enter full OCI ref (e.g., repo:tag or repo@sha256:...): " ref
+  ourbox_selection_is_clean_single_line_ref "${ref}" || {
+    ourbox_selection_log "Ref must be a single-line OCI ref without whitespace."
+    return 1
+  }
+
+  OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${ref}"
+  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="operator-override"
+  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL=""
+}
+
+ourbox_airgap_platform_selection_interactive_select_ref() {
+  local catalog_root="$1"
+  local required_contract_digest="$2"
+  local default_catalog_dir="${catalog_root}/default"
+  local channel_catalog_dir="${catalog_root}/channel"
+  local list_catalog_dir="${catalog_root}/list"
+  local choice=""
+  local default_ref=""
+  local default_source=""
+  local default_channel=""
+
+  OURBOX_AIRGAP_PLATFORM_SELECTED_REF=""
+  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE=""
+  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL=""
+
+  while [[ -z "${OURBOX_AIRGAP_PLATFORM_SELECTED_REF}" ]]; do
+    ourbox_airgap_platform_determine_default_ref "${default_catalog_dir}" "${required_contract_digest}"
+    default_ref="${OURBOX_AIRGAP_PLATFORM_SELECTED_REF}"
+    default_source="${OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE}"
+    default_channel="${OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL}"
+    OURBOX_AIRGAP_PLATFORM_SELECTED_REF=""
+
+    ourbox_airgap_platform_selection_show_default_choice "${default_ref}"
+    read -r -p "Choice: " choice
+
+    case "${choice}" in
+      "")
+        OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${default_ref}"
+        OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="${default_source}"
+        OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${default_channel}"
+        ;;
+      c)
+        ourbox_airgap_platform_selection_choose_channel_interactive "${channel_catalog_dir}" "${required_contract_digest}" || true
+        ;;
+      l)
+        ourbox_airgap_platform_selection_select_from_catalog_interactive "${list_catalog_dir}" "${required_contract_digest}" || true
+        ;;
+      r)
+        ourbox_airgap_platform_selection_prompt_custom_ref_interactive || true
+        ;;
+      o)
+        ourbox_airgap_platform_selection_override_repo_interactive || true
+        ;;
+      q|Q)
+        ourbox_selection_die "Install aborted by user"
+        ;;
+      *)
+        ourbox_selection_log "Unknown option."
+        ;;
+    esac
+  done
+}
+
+ourbox_airgap_platform_selection_finalize_registry_ref() {
+  local selected_ref="$1"
+  ourbox_selection_finalize_registry_ref_common \
+    "${selected_ref}" \
+    OURBOX_AIRGAP_PLATFORM_SELECTED_REF \
+    OURBOX_AIRGAP_PLATFORM_PULL_REF \
+    OURBOX_AIRGAP_PLATFORM_ARTIFACT_SOURCE \
+    OURBOX_AIRGAP_PLATFORM_ARTIFACT_REF \
+    OURBOX_AIRGAP_PLATFORM_ARTIFACT_DIGEST \
+    "airgap-platform artifact"
+}
+
+ourbox_airgap_platform_selection_validate_extracted_bundle() {
+  local bundle_dir="$1"
+  local required_contract_digest="$2"
+  local expected_arch="$3"
+  local manifest="${bundle_dir}/manifest.env"
+  local airgap_images_tar="${bundle_dir}/k3s/k3s-airgap-images-${expected_arch}.tar"
+  local manifest_airgap_source=""
+  local manifest_airgap_revision=""
+  local manifest_airgap_version=""
+  local manifest_airgap_created=""
+  local manifest_platform_contract_ref=""
+  local manifest_platform_contract_digest=""
+  local manifest_airgap_arch=""
+  local manifest_k3s_version=""
+  local manifest_platform_profile=""
+  local manifest_platform_images_lock_path=""
+  local manifest_platform_images_lock_sha256=""
+
+  [[ -f "${manifest}" ]] || ourbox_selection_die "airgap-platform bundle missing manifest.env: ${manifest}"
+  [[ -x "${bundle_dir}/k3s/k3s" ]] || ourbox_selection_die "airgap-platform bundle missing k3s binary: ${bundle_dir}/k3s/k3s"
+  [[ -f "${airgap_images_tar}" ]] || ourbox_selection_die "airgap-platform bundle missing k3s airgap images tar: ${airgap_images_tar}"
+  [[ -f "${bundle_dir}/platform/images.lock.json" ]] || ourbox_selection_die "airgap-platform bundle missing platform/images.lock.json"
+  [[ -f "${bundle_dir}/platform/profile.env" ]] || ourbox_selection_die "airgap-platform bundle missing platform/profile.env"
+  [[ -d "${bundle_dir}/platform/images" ]] || ourbox_selection_die "airgap-platform bundle missing platform/images directory"
+  find "${bundle_dir}/platform/images" -maxdepth 1 -type f -name '*.tar' -print -quit | grep -q . \
+    || ourbox_selection_die "airgap-platform bundle missing platform image tar payloads: ${bundle_dir}/platform/images"
+
+  # shellcheck disable=SC1090
+  source "${manifest}"
+  manifest_airgap_source="${OURBOX_AIRGAP_PLATFORM_SOURCE:-}"
+  manifest_airgap_revision="${OURBOX_AIRGAP_PLATFORM_REVISION:-}"
+  manifest_airgap_version="${OURBOX_AIRGAP_PLATFORM_VERSION:-}"
+  manifest_airgap_created="${OURBOX_AIRGAP_PLATFORM_CREATED:-}"
+  manifest_platform_contract_ref="${OURBOX_PLATFORM_CONTRACT_REF:-}"
+  manifest_platform_contract_digest="${OURBOX_PLATFORM_CONTRACT_DIGEST:-}"
+  manifest_airgap_arch="${AIRGAP_PLATFORM_ARCH:-}"
+  manifest_k3s_version="${K3S_VERSION:-}"
+  manifest_platform_profile="${OURBOX_PLATFORM_PROFILE:-}"
+  manifest_platform_images_lock_path="${OURBOX_PLATFORM_IMAGES_LOCK_PATH:-}"
+  manifest_platform_images_lock_sha256="${OURBOX_PLATFORM_IMAGES_LOCK_SHA256:-}"
+
+  [[ -n "${manifest_airgap_source}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_AIRGAP_PLATFORM_SOURCE"
+  [[ -n "${manifest_airgap_revision}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_AIRGAP_PLATFORM_REVISION"
+  [[ -n "${manifest_airgap_version}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_AIRGAP_PLATFORM_VERSION"
+  [[ -n "${manifest_airgap_created}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_AIRGAP_PLATFORM_CREATED"
+  ourbox_selection_is_sha256_digest "${required_contract_digest}" || ourbox_selection_die "required platform contract digest must be a sha256:<64 hex> before validating airgap-platform bundle"
+  ourbox_selection_is_sha256_digest "${manifest_platform_contract_digest}" || ourbox_selection_die "airgap-platform manifest carries invalid OURBOX_PLATFORM_CONTRACT_DIGEST"
+  [[ "${manifest_airgap_arch}" == "${expected_arch}" ]] || ourbox_selection_die "airgap-platform bundle arch mismatch: expected ${expected_arch}, got ${manifest_airgap_arch:-unknown}"
+  [[ "${manifest_platform_contract_digest}" == "${required_contract_digest}" ]] || ourbox_selection_die "airgap-platform bundle contract digest mismatch: expected ${required_contract_digest}, got ${manifest_platform_contract_digest}"
+  [[ -n "${manifest_k3s_version}" ]] || ourbox_selection_die "airgap-platform manifest missing K3S_VERSION"
+  [[ -n "${manifest_platform_profile}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_PLATFORM_PROFILE"
+  [[ -n "${manifest_platform_images_lock_path}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_PLATFORM_IMAGES_LOCK_PATH"
+  [[ "${manifest_platform_images_lock_sha256}" =~ ^[0-9a-f]{64}$ ]] || ourbox_selection_die "airgap-platform manifest carries invalid OURBOX_PLATFORM_IMAGES_LOCK_SHA256"
+
+  OURBOX_AIRGAP_PLATFORM_SOURCE="${manifest_airgap_source}"
+  OURBOX_AIRGAP_PLATFORM_REVISION="${manifest_airgap_revision}"
+  OURBOX_AIRGAP_PLATFORM_VERSION="${manifest_airgap_version}"
+  OURBOX_AIRGAP_PLATFORM_CREATED="${manifest_airgap_created}"
+  OURBOX_AIRGAP_PLATFORM_ARCH="${manifest_airgap_arch}"
+  OURBOX_AIRGAP_PLATFORM_PROFILE="${manifest_platform_profile}"
+  OURBOX_AIRGAP_PLATFORM_K3S_VERSION="${manifest_k3s_version}"
+  OURBOX_AIRGAP_PLATFORM_IMAGES_LOCK_SHA256="${manifest_platform_images_lock_sha256}"
 }
