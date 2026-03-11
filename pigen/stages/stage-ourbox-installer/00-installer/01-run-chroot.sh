@@ -42,6 +42,17 @@ fi
 : "${OS_TARGET:=rpi}"
 : "${OS_CHANNEL:=stable}"
 : "${OS_DEFAULT_REF:=}"
+: "${AIRGAP_PLATFORM_REPO:=ghcr.io/techofourown/sw-ourbox-os/airgap-platform}"
+: "${AIRGAP_PLATFORM_ARCH:=arm64}"
+: "${AIRGAP_PLATFORM_CHANNEL:=stable}"
+: "${AIRGAP_PLATFORM_REF:=}"
+: "${AIRGAP_PLATFORM_DEFAULT_REF:=}"
+: "${AIRGAP_PLATFORM_CATALOG_ENABLED:=1}"
+: "${AIRGAP_PLATFORM_CATALOG_TAG:=catalog-${AIRGAP_PLATFORM_ARCH}}"
+: "${AIRGAP_PLATFORM_CHANNEL_STABLE_TAG:=stable-${AIRGAP_PLATFORM_ARCH}}"
+: "${AIRGAP_PLATFORM_CHANNEL_BETA_TAG:=beta-${AIRGAP_PLATFORM_ARCH}}"
+: "${AIRGAP_PLATFORM_CHANNEL_NIGHTLY_TAG:=nightly-${AIRGAP_PLATFORM_ARCH}}"
+: "${AIRGAP_PLATFORM_CHANNEL_EXP_LABS_TAG:=exp-labs-${AIRGAP_PLATFORM_ARCH}}"
 : "${CHANNEL_STABLE_TAG:=${OS_TARGET}-stable}"
 : "${CHANNEL_BETA_TAG:=${OS_TARGET}-beta}"
 : "${CHANNEL_NIGHTLY_TAG:=${OS_TARGET}-nightly}"
@@ -68,7 +79,7 @@ EOF
   cat <<'EOF'
 
 # Optional remote defaults profile published by sw-ourbox-os.
-# If available, this can override OS_REPO/channel tags/default ref at install time.
+# If available, this can override OS and airgap selection controls at install time.
 EOF
   emit_shell_assignment "INSTALL_DEFAULTS_REF" "${INSTALL_DEFAULTS_REF}"
   emit_shell_assignment "INSTALLER_ID" "${INSTALLER_ID}"
@@ -93,6 +104,21 @@ EOF
 EOF
   emit_shell_assignment "OS_CATALOG_ENABLED" "${OS_CATALOG_ENABLED}"
   emit_shell_assignment "OS_CATALOG_TAG" "${OS_CATALOG_TAG}"
+  cat <<'EOF'
+
+# Airgap-platform defaults applied after OS selection.
+EOF
+  emit_shell_assignment "AIRGAP_PLATFORM_REPO" "${AIRGAP_PLATFORM_REPO}"
+  emit_shell_assignment "AIRGAP_PLATFORM_ARCH" "${AIRGAP_PLATFORM_ARCH}"
+  emit_shell_assignment "AIRGAP_PLATFORM_CHANNEL" "${AIRGAP_PLATFORM_CHANNEL}"
+  emit_shell_assignment "AIRGAP_PLATFORM_REF" "${AIRGAP_PLATFORM_REF}"
+  emit_shell_assignment "AIRGAP_PLATFORM_DEFAULT_REF" "${AIRGAP_PLATFORM_DEFAULT_REF}"
+  emit_shell_assignment "AIRGAP_PLATFORM_CATALOG_ENABLED" "${AIRGAP_PLATFORM_CATALOG_ENABLED}"
+  emit_shell_assignment "AIRGAP_PLATFORM_CATALOG_TAG" "${AIRGAP_PLATFORM_CATALOG_TAG}"
+  emit_shell_assignment "AIRGAP_PLATFORM_CHANNEL_STABLE_TAG" "${AIRGAP_PLATFORM_CHANNEL_STABLE_TAG}"
+  emit_shell_assignment "AIRGAP_PLATFORM_CHANNEL_BETA_TAG" "${AIRGAP_PLATFORM_CHANNEL_BETA_TAG}"
+  emit_shell_assignment "AIRGAP_PLATFORM_CHANNEL_NIGHTLY_TAG" "${AIRGAP_PLATFORM_CHANNEL_NIGHTLY_TAG}"
+  emit_shell_assignment "AIRGAP_PLATFORM_CHANNEL_EXP_LABS_TAG" "${AIRGAP_PLATFORM_CHANNEL_EXP_LABS_TAG}"
   cat <<'EOF'
 
 # Artifact type used when pushing OS payloads via ORAS.
