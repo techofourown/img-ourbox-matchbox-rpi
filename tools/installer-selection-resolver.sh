@@ -741,12 +741,47 @@ ourbox_airgap_platform_catalog_newest_ref() {
   printf '%s\n' "${row##*$'\t'}"
 }
 
-ourbox_airgap_platform_determine_default_ref() {
+ourbox_airgap_platform_determine_channel_ref() {
   local catalog_dir="$1"
   local required_contract_digest="$2"
+  local channel="${3:-${AIRGAP_PLATFORM_CHANNEL}}"
   local channel_tag_ref=""
   local catalog_tsv=""
   local catalog_ref=""
+
+  ourbox_airgap_platform_selection_require_context "${required_contract_digest}"
+
+  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE=""
+  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL=""
+  OURBOX_AIRGAP_PLATFORM_SELECTED_REF=""
+  OURBOX_AIRGAP_PLATFORM_CATALOG_REF=""
+
+  channel_tag_ref="${AIRGAP_PLATFORM_REPO}:$(ourbox_airgap_platform_selection_channel_tag "${channel}")"
+
+  if [[ "${AIRGAP_PLATFORM_CATALOG_ENABLED:-1}" == "1" ]]; then
+    if ourbox_airgap_platform_selection_pull_catalog "${catalog_dir}"; then
+      catalog_tsv="${catalog_dir}/catalog.tsv"
+      catalog_ref="$(ourbox_airgap_platform_catalog_newest_ref "${catalog_tsv}" "${channel}" "${required_contract_digest}" "${AIRGAP_PLATFORM_ARCH:-}" || true)"
+      if ourbox_selection_is_digest_pinned_ref "${catalog_ref}"; then
+        OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="catalog"
+        OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${channel}"
+        OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${catalog_ref}"
+        return 0
+      fi
+      ourbox_selection_log "Airgap catalog has no valid digest-pinned entry for channel '${channel}' and contract '${required_contract_digest}'; falling back to channel tag."
+    else
+      ourbox_selection_log "Airgap catalog unavailable; falling back to channel tag."
+    fi
+  fi
+
+  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="channel-tag"
+  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${channel}"
+  OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${channel_tag_ref}"
+}
+
+ourbox_airgap_platform_determine_default_ref() {
+  local catalog_dir="$1"
+  local required_contract_digest="$2"
 
   ourbox_airgap_platform_selection_require_context "${required_contract_digest}"
 
@@ -767,27 +802,7 @@ ourbox_airgap_platform_determine_default_ref() {
     return 0
   fi
 
-  channel_tag_ref="${AIRGAP_PLATFORM_REPO}:$(ourbox_airgap_platform_selection_channel_tag "${AIRGAP_PLATFORM_CHANNEL}")"
-
-  if [[ "${AIRGAP_PLATFORM_CATALOG_ENABLED:-1}" == "1" ]]; then
-    if ourbox_airgap_platform_selection_pull_catalog "${catalog_dir}"; then
-      catalog_tsv="${catalog_dir}/catalog.tsv"
-      catalog_ref="$(ourbox_airgap_platform_catalog_newest_ref "${catalog_tsv}" "${AIRGAP_PLATFORM_CHANNEL}" "${required_contract_digest}" "${AIRGAP_PLATFORM_ARCH:-}" || true)"
-      if ourbox_selection_is_digest_pinned_ref "${catalog_ref}"; then
-        OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="catalog"
-        OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${AIRGAP_PLATFORM_CHANNEL}"
-        OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${catalog_ref}"
-        return 0
-      fi
-      ourbox_selection_log "Airgap catalog has no valid digest-pinned entry for channel '${AIRGAP_PLATFORM_CHANNEL}' and contract '${required_contract_digest}'; falling back to channel tag."
-    else
-      ourbox_selection_log "Airgap catalog unavailable; falling back to channel tag."
-    fi
-  fi
-
-  OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="channel-tag"
-  OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${AIRGAP_PLATFORM_CHANNEL}"
-  OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${channel_tag_ref}"
+  ourbox_airgap_platform_determine_channel_ref "${catalog_dir}" "${required_contract_digest}" "${AIRGAP_PLATFORM_CHANNEL}"
 }
 
 ourbox_airgap_platform_selection_show_default_choice() {
@@ -873,7 +888,7 @@ ourbox_airgap_platform_selection_choose_channel_interactive() {
       ;;
   esac
 
-  ourbox_airgap_platform_determine_default_ref "${catalog_dir}" "${required_contract_digest}"
+  ourbox_airgap_platform_determine_channel_ref "${catalog_dir}" "${required_contract_digest}" "${AIRGAP_PLATFORM_CHANNEL}"
 }
 
 ourbox_airgap_platform_selection_select_from_catalog_interactive() {
@@ -1034,6 +1049,8 @@ ourbox_airgap_platform_selection_validate_extracted_bundle() {
   local manifest_platform_profile=""
   local manifest_platform_images_lock_path=""
   local manifest_platform_images_lock_sha256=""
+  local manifest_dump=""
+  local -a manifest_fields=()
 
   [[ -f "${manifest}" ]] || ourbox_selection_die "airgap-platform bundle missing manifest.env: ${manifest}"
   [[ -x "${bundle_dir}/k3s/k3s" ]] || ourbox_selection_die "airgap-platform bundle missing k3s binary: ${bundle_dir}/k3s/k3s"
@@ -1044,18 +1061,40 @@ ourbox_airgap_platform_selection_validate_extracted_bundle() {
   find "${bundle_dir}/platform/images" -maxdepth 1 -type f -name '*.tar' -print -quit | grep -q . \
     || ourbox_selection_die "airgap-platform bundle missing platform image tar payloads: ${bundle_dir}/platform/images"
 
-  # shellcheck disable=SC1090
-  source "${manifest}"
-  manifest_airgap_source="${OURBOX_AIRGAP_PLATFORM_SOURCE:-}"
-  manifest_airgap_revision="${OURBOX_AIRGAP_PLATFORM_REVISION:-}"
-  manifest_airgap_version="${OURBOX_AIRGAP_PLATFORM_VERSION:-}"
-  manifest_airgap_created="${OURBOX_AIRGAP_PLATFORM_CREATED:-}"
-  manifest_platform_contract_digest="${OURBOX_PLATFORM_CONTRACT_DIGEST:-}"
-  manifest_airgap_arch="${AIRGAP_PLATFORM_ARCH:-}"
-  manifest_k3s_version="${K3S_VERSION:-}"
-  manifest_platform_profile="${OURBOX_PLATFORM_PROFILE:-}"
-  manifest_platform_images_lock_path="${OURBOX_PLATFORM_IMAGES_LOCK_PATH:-}"
-  manifest_platform_images_lock_sha256="${OURBOX_PLATFORM_IMAGES_LOCK_SHA256:-}"
+  manifest_dump="$(
+    (
+      unset OURBOX_AIRGAP_PLATFORM_SOURCE OURBOX_AIRGAP_PLATFORM_REVISION OURBOX_AIRGAP_PLATFORM_VERSION
+      unset OURBOX_AIRGAP_PLATFORM_CREATED OURBOX_PLATFORM_CONTRACT_DIGEST AIRGAP_PLATFORM_ARCH
+      unset K3S_VERSION OURBOX_PLATFORM_PROFILE OURBOX_PLATFORM_IMAGES_LOCK_PATH OURBOX_PLATFORM_IMAGES_LOCK_SHA256
+      # shellcheck disable=SC1090
+      source "${manifest}"
+      printf '%s\n' \
+        "${OURBOX_AIRGAP_PLATFORM_SOURCE-}" \
+        "${OURBOX_AIRGAP_PLATFORM_REVISION-}" \
+        "${OURBOX_AIRGAP_PLATFORM_VERSION-}" \
+        "${OURBOX_AIRGAP_PLATFORM_CREATED-}" \
+        "${OURBOX_PLATFORM_CONTRACT_DIGEST-}" \
+        "${AIRGAP_PLATFORM_ARCH-}" \
+        "${K3S_VERSION-}" \
+        "${OURBOX_PLATFORM_PROFILE-}" \
+        "${OURBOX_PLATFORM_IMAGES_LOCK_PATH-}" \
+        "${OURBOX_PLATFORM_IMAGES_LOCK_SHA256-}" \
+        "__OURBOX_AIRGAP_MANIFEST_END__"
+    )
+  )" || ourbox_selection_die "failed to parse airgap-platform manifest: ${manifest}"
+  mapfile -t manifest_fields <<<"${manifest_dump}"
+  [[ "${#manifest_fields[@]}" -eq 11 && "${manifest_fields[10]}" == "__OURBOX_AIRGAP_MANIFEST_END__" ]] \
+    || ourbox_selection_die "airgap-platform manifest parse produced an unexpected field set: ${manifest}"
+  manifest_airgap_source="${manifest_fields[0]}"
+  manifest_airgap_revision="${manifest_fields[1]}"
+  manifest_airgap_version="${manifest_fields[2]}"
+  manifest_airgap_created="${manifest_fields[3]}"
+  manifest_platform_contract_digest="${manifest_fields[4]}"
+  manifest_airgap_arch="${manifest_fields[5]}"
+  manifest_k3s_version="${manifest_fields[6]}"
+  manifest_platform_profile="${manifest_fields[7]}"
+  manifest_platform_images_lock_path="${manifest_fields[8]}"
+  manifest_platform_images_lock_sha256="${manifest_fields[9]}"
 
   [[ -n "${manifest_airgap_source}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_AIRGAP_PLATFORM_SOURCE"
   [[ -n "${manifest_airgap_revision}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_AIRGAP_PLATFORM_REVISION"
