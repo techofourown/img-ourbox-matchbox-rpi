@@ -31,7 +31,7 @@ fi
 
 EXPECTED_AIRGAP_PLATFORM_DEFAULT_REF="${EXPECTED_AIRGAP_PLATFORM_DEFAULT_REF:-}"
 if [[ -z "${EXPECTED_AIRGAP_PLATFORM_DEFAULT_REF}" && -f "${ROOT}/release/official-inputs.env" ]]; then
-  # shellcheck disable=SC1090
+  # shellcheck disable=SC1091
   source "${ROOT}/release/official-inputs.env"
   EXPECTED_AIRGAP_PLATFORM_DEFAULT_REF="${AIRGAP_PLATFORM_REF:-}"
 fi

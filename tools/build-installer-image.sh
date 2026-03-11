@@ -11,7 +11,7 @@ source "${ROOT}/tools/registry.sh"
 OFFICIAL_INPUTS_ENV="${ROOT}/release/official-inputs.env"
 OFFICIAL_AIRGAP_PLATFORM_REF=""
 if [[ -f "${OFFICIAL_INPUTS_ENV}" ]]; then
-  # shellcheck disable=SC1091
+  # shellcheck disable=SC1090
   source "${OFFICIAL_INPUTS_ENV}"
   OFFICIAL_AIRGAP_PLATFORM_REF="${AIRGAP_PLATFORM_REF:-}"
 fi

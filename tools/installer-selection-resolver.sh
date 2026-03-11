@@ -886,13 +886,13 @@ ourbox_airgap_platform_selection_select_from_catalog_interactive() {
   local tag=""
   local created=""
   local version=""
-  local revision=""
+  local _revision=""
   local arch=""
   local contract=""
   local profile=""
-  local k3s_version=""
-  local lock_sha=""
-  local artifact_digest=""
+  local _k3s_version=""
+  local _lock_sha=""
+  local _artifact_digest=""
   local pinned_ref=""
   local i=1
   local -a entries=()
@@ -915,7 +915,7 @@ ourbox_airgap_platform_selection_select_from_catalog_interactive() {
   echo
   echo "Airgap catalog entries (${OURBOX_AIRGAP_PLATFORM_CATALOG_REF}):"
   for chosen in "${entries[@]}"; do
-    IFS=$'\t' read -r channel tag created version revision arch contract profile k3s_version lock_sha artifact_digest pinned_ref <<<"${chosen}"
+    IFS=$'\t' read -r channel tag created version _revision arch contract profile _k3s_version _lock_sha _artifact_digest pinned_ref <<<"${chosen}"
     printf "  %d) %-10s %-24s %s %s %s\n" "${i}" "${channel}" "${tag}" "${version}" "${created}" "${contract}"
     i=$((i + 1))
   done
@@ -932,7 +932,7 @@ ourbox_airgap_platform_selection_select_from_catalog_interactive() {
   fi
 
   chosen="${entries[$((pick - 1))]}"
-  IFS=$'\t' read -r channel tag created version revision arch contract profile k3s_version lock_sha artifact_digest pinned_ref <<<"${chosen}"
+  IFS=$'\t' read -r channel tag created version _revision arch contract profile _k3s_version _lock_sha _artifact_digest pinned_ref <<<"${chosen}"
   OURBOX_AIRGAP_PLATFORM_SELECTED_REF="${pinned_ref}"
   OURBOX_AIRGAP_PLATFORM_INSTALL_SELECTION_SOURCE="catalog"
   OURBOX_AIRGAP_PLATFORM_RELEASE_CHANNEL="${channel}"
@@ -1028,7 +1028,6 @@ ourbox_airgap_platform_selection_validate_extracted_bundle() {
   local manifest_airgap_revision=""
   local manifest_airgap_version=""
   local manifest_airgap_created=""
-  local manifest_platform_contract_ref=""
   local manifest_platform_contract_digest=""
   local manifest_airgap_arch=""
   local manifest_k3s_version=""
@@ -1051,7 +1050,6 @@ ourbox_airgap_platform_selection_validate_extracted_bundle() {
   manifest_airgap_revision="${OURBOX_AIRGAP_PLATFORM_REVISION:-}"
   manifest_airgap_version="${OURBOX_AIRGAP_PLATFORM_VERSION:-}"
   manifest_airgap_created="${OURBOX_AIRGAP_PLATFORM_CREATED:-}"
-  manifest_platform_contract_ref="${OURBOX_PLATFORM_CONTRACT_REF:-}"
   manifest_platform_contract_digest="${OURBOX_PLATFORM_CONTRACT_DIGEST:-}"
   manifest_airgap_arch="${AIRGAP_PLATFORM_ARCH:-}"
   manifest_k3s_version="${K3S_VERSION:-}"
@@ -1072,12 +1070,12 @@ ourbox_airgap_platform_selection_validate_extracted_bundle() {
   [[ -n "${manifest_platform_images_lock_path}" ]] || ourbox_selection_die "airgap-platform manifest missing OURBOX_PLATFORM_IMAGES_LOCK_PATH"
   [[ "${manifest_platform_images_lock_sha256}" =~ ^[0-9a-f]{64}$ ]] || ourbox_selection_die "airgap-platform manifest carries invalid OURBOX_PLATFORM_IMAGES_LOCK_SHA256"
 
-  OURBOX_AIRGAP_PLATFORM_SOURCE="${manifest_airgap_source}"
-  OURBOX_AIRGAP_PLATFORM_REVISION="${manifest_airgap_revision}"
-  OURBOX_AIRGAP_PLATFORM_VERSION="${manifest_airgap_version}"
-  OURBOX_AIRGAP_PLATFORM_CREATED="${manifest_airgap_created}"
-  OURBOX_AIRGAP_PLATFORM_ARCH="${manifest_airgap_arch}"
-  OURBOX_AIRGAP_PLATFORM_PROFILE="${manifest_platform_profile}"
-  OURBOX_AIRGAP_PLATFORM_K3S_VERSION="${manifest_k3s_version}"
-  OURBOX_AIRGAP_PLATFORM_IMAGES_LOCK_SHA256="${manifest_platform_images_lock_sha256}"
+  export OURBOX_AIRGAP_PLATFORM_SOURCE="${manifest_airgap_source}"
+  export OURBOX_AIRGAP_PLATFORM_REVISION="${manifest_airgap_revision}"
+  export OURBOX_AIRGAP_PLATFORM_VERSION="${manifest_airgap_version}"
+  export OURBOX_AIRGAP_PLATFORM_CREATED="${manifest_airgap_created}"
+  export OURBOX_AIRGAP_PLATFORM_ARCH="${manifest_airgap_arch}"
+  export OURBOX_AIRGAP_PLATFORM_PROFILE="${manifest_platform_profile}"
+  export OURBOX_AIRGAP_PLATFORM_K3S_VERSION="${manifest_k3s_version}"
+  export OURBOX_AIRGAP_PLATFORM_IMAGES_LOCK_SHA256="${manifest_platform_images_lock_sha256}"
 }
