@@ -1,3 +1,10 @@
+## [0.13.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.13.1...v0.13.2) (2026-03-12)
+
+
+### Bug Fixes
+
+* refresh approved upstream pins to v0.16.2 ([8d7438e](https://github.com/techofourown/img-ourbox-matchbox/commit/8d7438ead2b6f5a521467bfc0be8708f9df00b34))
+
 ## [0.13.1](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.13.0...v0.13.1) (2026-03-11)
 
 
