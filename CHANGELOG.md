@@ -1,3 +1,10 @@
+## [0.13.3](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.13.2...v0.13.3) (2026-03-14)
+
+
+### Bug Fixes
+
+* accept current platform-contract manifest names ([073cc90](https://github.com/techofourown/img-ourbox-matchbox/commit/073cc90ea9982a4c7d067b258d5280dfc28ac563))
+
 ## [0.13.2](https://github.com/techofourown/img-ourbox-matchbox/compare/v0.13.1...v0.13.2) (2026-03-12)
 
 
