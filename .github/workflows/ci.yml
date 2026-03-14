@@ -73,6 +73,16 @@ jobs:
       - name: Run installer SSH policy smoke
         run: bash tools/check-installer-ssh-policy-smoke.sh
 
+  platform-contract-shape:
+    name: Platform contract shape smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run platform contract shape smoke
+        run: bash tools/check-validate-platform-contract-shape-smoke.sh
+
   release-control-vendoring:
     name: Vendored release-control sync
     runs-on: ubuntu-latest
